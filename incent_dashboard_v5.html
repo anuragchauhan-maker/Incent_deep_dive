@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MPL Incent Deep Dive — May 25, 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0f0f0f;--surface:#181818;--border:#2a2a2a;
+  --ibx:#D64545;--maf:#E8A33D;--adc:#5B7FDB;--frc:#4AAB7E;--plat:#888;
+  --up:#4AAB7E;--dn:#D64545;--fl:#888;
+  --txt:#e8e8e8;--muted:#888;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:'Fraunces',serif;font-size:14px;line-height:1.5}
+code,pre,.mono{font-family:'JetBrains Mono',monospace}
+h1{font-size:1.8rem;font-weight:700;letter-spacing:-0.5px}
+h2{font-size:1.2rem;font-weight:600;color:#ccc;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:16px}
+h3{font-size:.95rem;font-weight:600;color:#aaa;margin-bottom:8px}
+.wrap{max-width:1400px;margin:0 auto;padding:24px}
+.header{padding:28px 0 20px;border-bottom:2px solid #333;margin-bottom:28px}
+.header .meta{color:var(--muted);font-size:.85rem;font-family:'JetBrains Mono',monospace;margin-top:6px}
+.pill{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.75rem;font-family:'JetBrains Mono',monospace;font-weight:500}
+.pill-red{background:#3a1414;color:#D64545;border:1px solid #D64545}
+.pill-green{background:#0e2e1e;color:#4AAB7E;border:1px solid #4AAB7E}
+.pill-orange{background:#2e1e06;color:#E8A33D;border:1px solid #E8A33D}
+.pill-blue{background:#111827;color:#5B7FDB;border:1px solid #5B7FDB}
+.pill-gray{background:#1e1e1e;color:#888;border:1px solid #444}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:24px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+.chart-box{position:relative;height:260px}
+.chart-box-tall{position:relative;height:320px}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+th{text-align:left;padding:7px 10px;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.75rem;font-weight:500;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:6px 10px;border-bottom:1px solid #1e1e1e;white-space:nowrap}
+tr:hover td{background:#1f1f1f}
+.num{text-align:right;font-family:'JetBrains Mono',monospace}
+.up{color:var(--up)}
+.dn{color:var(--dn)}
+.fl{color:var(--fl)}
+.channel-ibx{color:var(--ibx)}
+.channel-maf{color:var(--maf)}
+.channel-adc{color:var(--adc)}
+.channel-frc{color:var(--frc)}
+.platform-row td{background:#1a1a1a;color:#aaa;font-style:italic}
+select{background:#222;color:#ccc;border:1px solid #444;padding:5px 10px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:.8rem;cursor:pointer}
+.controls{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.controls label{font-size:.78rem;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.flag-badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:.72rem;font-family:'JetBrains Mono',monospace;font-weight:700}
+.annotation{background:#1a1a1a;border-left:3px solid #E8A33D;padding:8px 12px;font-size:.8rem;color:#aaa;margin-bottom:12px;border-radius:0 4px 4px 0}
+.section-divider{height:1px;background:var(--border);margin:8px 0 20px}
+.spark{display:inline-block;width:60px;height:20px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="header">
+  <h1>MPL Incent Channel Deep Dive</h1>
+  <div class="meta">Analysis period: Apr 6 – May 31, 2026 &nbsp;|&nbsp; Last matured week: <strong>May 25–31</strong> &nbsp;|&nbsp; Country: US &nbsp;|&nbsp; Generated: Jun 9, 2026</div>
+  <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+    <span style="color:var(--ibx)">● InboxDollars</span>
+    <span style="color:var(--maf);margin-left:10px">● MyAppFree</span>
+    <span style="color:var(--adc);margin-left:10px">● AdAction</span>
+    <span style="color:var(--frc);margin-left:10px">● FreeCash</span>
+    <span style="color:var(--plat);margin-left:10px">● Platform</span>
+  </div>
+</div>
+
+<div class="annotation">
+  ⚠ <strong>InboxDollars reporting change Mar 23, 2026</strong>: SiteID attribution shifted from single "Prodege" code to <code>vc-*</code> identifiers. Pre/post siteid-level comparisons are reporting changes, not acquisition events.
+</div>
+
+
+<div class="panel">
+<h2>📊 Period Comparison: Last 4 Weeks (W1–W4: May 4–31) vs Weeks 5–8 (Apr 6 – May 3)</h2>
+<table>
+<thead><tr>
+  <th>Channel</th>
+  <th class="num">Spend W5–8 avg/wk</th>
+  <th class="num">Spend W1–4 avg/wk</th>
+  <th class="num">Spend Δ</th>
+  <th class="num">CVR W5–8</th>
+  <th class="num">CVR W1–4</th>
+  <th class="num">CVR Δ</th>
+  <th class="num">Lvl>20 W5–8</th>
+  <th class="num">Lvl>20 W1–4</th>
+  <th class="num">Lvl Δ</th>
+  <th class="num">ROAS W5–8</th>
+  <th class="num">ROAS W1–4</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td><span class="channel-ibx">●</span> <strong>InboxDollars</strong></td>
+<td class="num">$40,008</td>
+<td class="num">$42,656</td>
+<td class="num"><span class="up">▲7%</span></td>
+<td class="num">15.1%</td>
+<td class="num">13.9%</td>
+<td class="num"><span class="dn">▼1.2pp</span></td>
+<td class="num">14.1%</td>
+<td class="num">13.3%</td>
+<td class="num"><span class="dn">▼0.8pp</span></td>
+<td class="num" style="color:#D64545;font-weight:700">4.6%</td>
+<td class="num" style="color:#D64545;font-weight:700">5.3%</td>
+</tr>
+<tr>
+<td><span class="channel-maf">●</span> <strong>MyAppFree</strong></td>
+<td class="num">$41,384</td>
+<td class="num">$18,846</td>
+<td class="num"><span class="dn">▼54%</span></td>
+<td class="num">19.2%</td>
+<td class="num">24.0%</td>
+<td class="num"><span class="up">▲4.8pp</span></td>
+<td class="num">15.2%</td>
+<td class="num">19.7%</td>
+<td class="num"><span class="up">▲4.5pp</span></td>
+<td class="num" style="color:#D64545;font-weight:700">4.2%</td>
+<td class="num" style="color:#D64545;font-weight:700">7.1%</td>
+</tr>
+<tr>
+<td><span class="channel-adc">●</span> <strong>AdAction</strong></td>
+<td class="num">$17,746</td>
+<td class="num">$18,000</td>
+<td class="num"><span class="fl">◆+1%</span></td>
+<td class="num">12.9%</td>
+<td class="num">16.2%</td>
+<td class="num"><span class="up">▲3.3pp</span></td>
+<td class="num">15.5%</td>
+<td class="num">17.7%</td>
+<td class="num"><span class="up">▲2.2pp</span></td>
+<td class="num" style="color:#D64545;font-weight:700">2.7%</td>
+<td class="num" style="color:#D64545;font-weight:700">2.4%</td>
+</tr>
+<tr>
+<td><span class="channel-frc">●</span> <strong>FreeCash</strong></td>
+<td class="num">$6,657</td>
+<td class="num">$2,584</td>
+<td class="num"><span class="dn">▼61%</span></td>
+<td class="num">22.8%</td>
+<td class="num">20.1%</td>
+<td class="num"><span class="dn">▼2.7pp</span></td>
+<td class="num">18.5%</td>
+<td class="num">18.8%</td>
+<td class="num"><span class="fl">◆+0.3pp</span></td>
+<td class="num" style="color:#E8A33D;font-weight:700">15.9%</td>
+<td class="num" style="color:#E8A33D;font-weight:700">20.0%</td>
+</tr>
+</tbody>
+<tfoot><tr class="platform-row">
+<td colspan="1"><em>Platform Benchmark</em></td>
+<td colspan="3"></td>
+<td class="num">17.5%</td>
+<td class="num">16.8%</td>
+<td class="num"></td>
+<td class="num">21.8%</td>
+<td class="num">21.1%</td>
+<td colspan="3"></td>
+</tr></tfoot>
+</table>
+</div>
+
+
+<div class="panel">
+<h2>📅 Latest Matured Week (May 25) vs Previous Week (May 18)</h2>
+<table>
+<thead><tr>
+  <th>Channel</th>
+  <th class="num">Spend May 18</th>
+  <th class="num">Spend May 25</th>
+  <th class="num">CVR May 18</th>
+  <th class="num">CVR May 25</th>
+  <th class="num">CVR WoW</th>
+  <th class="num">Lvl>20 May 18</th>
+  <th class="num">Lvl>20 May 25</th>
+  <th class="num">Lvl WoW</th>
+  <th class="num">ROAS May 18</th>
+  <th class="num">ROAS May 25</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td><span class="channel-ibx">●</span> <strong>InboxDollars</strong></td>
+<td class="num">$51,071</td>
+<td class="num">$46,401</td>
+<td class="num">11.7%</td>
+<td class="num">12.5%</td>
+<td class="num"><span class="up">▲0.8pp</span></td>
+<td class="num">12.1%</td>
+<td class="num">11.6%</td>
+<td class="num"><span class="fl">◆-0.5pp</span></td>
+<td class="num" style="color:#D64545;font-weight:700">2.7%</td>
+<td class="num" style="color:#D64545;font-weight:700">6.5%</td>
+</tr>
+<tr>
+<td><span class="channel-maf">●</span> <strong>MyAppFree</strong></td>
+<td class="num">$16,436</td>
+<td class="num">$22,362</td>
+<td class="num">23.6%</td>
+<td class="num">24.8%</td>
+<td class="num"><span class="up">▲1.2pp</span></td>
+<td class="num">18.4%</td>
+<td class="num">20.6%</td>
+<td class="num"><span class="up">▲2.2pp</span></td>
+<td class="num" style="color:#D64545;font-weight:700">7.4%</td>
+<td class="num" style="color:#D64545;font-weight:700">7.3%</td>
+</tr>
+<tr>
+<td><span class="channel-adc">●</span> <strong>AdAction</strong></td>
+<td class="num">$13,515</td>
+<td class="num">$16,537</td>
+<td class="num">17.4%</td>
+<td class="num">16.8%</td>
+<td class="num"><span class="dn">▼0.6pp</span></td>
+<td class="num">17.9%</td>
+<td class="num">17.2%</td>
+<td class="num"><span class="dn">▼0.7pp</span></td>
+<td class="num" style="color:#D64545;font-weight:700">-4.4%</td>
+<td class="num" style="color:#D64545;font-weight:700">5.9%</td>
+</tr>
+<tr>
+<td><span class="channel-frc">●</span> <strong>FreeCash</strong></td>
+<td class="num">$54</td>
+<td class="num">$33</td>
+<td class="num">—%</td>
+<td class="num">—%</td>
+<td class="num"></td>
+<td class="num">—%</td>
+<td class="num">—%</td>
+<td class="num"></td>
+<td class="num" >—%</td>
+<td class="num" >—%</td>
+</tr>
+</tbody>
+<tfoot><tr class="platform-row">
+<td colspan="3"><em>Platform Benchmark</em></td>
+<td class="num">15.71%</td>
+<td class="num">16.23%</td>
+<td class="num"></td>
+<td class="num">20.25%</td>
+<td class="num">19.38%</td>
+<td colspan="2"></td>
+</tr></tfoot>
+</table>
+</div>
+
+
+<div class="panel">
+<h2>Panel I — Weekly Spend by Channel (Stacked)</h2>
+<div class="chart-box-tall"><canvas id="spendChart"></canvas></div>
+</div>
+
+
+<div class="panel">
+<h2>Panel II — D7 Quality KPIs: Dep CVR & Level >20% by Channel</h2>
+<div class="grid2">
+  <div>
+    <h3>D7 Depositor CVR %</h3>
+    <div class="chart-box"><canvas id="cvrChart"></canvas></div>
+  </div>
+  <div>
+    <h3>D7 Level >20% (Player cohort)</h3>
+    <div class="chart-box"><canvas id="lvlChart"></canvas></div>
+  </div>
+</div>
+</div>
+
+
+<div class="panel">
+<h2>Panel III — Channel Deep Dive</h2>
+<div class="controls">
+  <label>Channel:</label>
+  <select id="ch3" onchange="renderP3()">
+    <option>InboxDollars</option>
+    <option>MyAppFree</option>
+    <option>AdAction</option>
+    <option>FreeCash</option>
+  </select>
+  <label style="margin-left:10px">Category:</label>
+  <select id="cat3" onchange="renderP3()">
+    <option value="Overall">Overall</option>
+    <option value="Bingo">Bingo</option>
+    <option value="Solitaire">Solitaire</option>
+    <option value="GinRummy">GinRummy</option>
+  </select>
+</div>
+<div class="chart-box-tall"><canvas id="p3Chart"></canvas></div>
+</div>
+
+
+<div class="panel">
+<h2>Panel IV — Sub-Source (af_siteid) Drilldown</h2>
+<div class="annotation" style="margin-bottom:10px">Only siteids with ≥200 cumulative logins shown. InboxDollars vc-* codes represent post-Mar 23 Prodege reporting change.</div>
+<div class="controls">
+  <label>Channel:</label>
+  <select id="ch4" onchange="renderP4()">
+    <option>InboxDollars</option>
+    <option>MyAppFree</option>
+    <option>AdAction</option>
+  </select>
+  <label style="margin-left:10px">Metric:</label>
+  <select id="met4" onchange="renderP4()">
+    <option value="cvr">D7 Dep CVR %</option>
+    <option value="lvl">D7 Lvl >20 %</option>
+    <option value="logins">Logins (volume)</option>
+  </select>
+</div>
+<div class="chart-box-tall"><canvas id="p4Chart"></canvas></div>
+</div>
+
+
+<div class="panel">
+<h2>🎯 SiteID-Level Recommendations</h2>
+
+<h3 style="margin-top:14px"><span class="channel-ibx">●</span> InboxDollars</h3>
+<table><thead><tr><th>SiteID</th><th>Action</th><th>Rationale</th><th>Campaigns Affected</th></tr></thead><tbody>
+<tr>
+<td class="mono">vc-18936</td>
+<td><span class="flag-badge" style="background:#0e2e1e;color:#4AAB7E;border:1px solid #4AAB7E">SCALE UP</span></td>
+<td style="white-space:normal;max-width:420px">Best CVR 22–32% consistently. All 4 weeks above platform.</td>
+<td style="color:#888;font-size:.78rem">Bingo, Solitaire, GinRummy (new May 18)</td>
+</tr>
+<tr>
+<td class="mono">vc-22484</td>
+<td><span class="flag-badge" style="background:#0e2e1e;color:#4AAB7E;border:1px solid #4AAB7E">SCALE UP</span></td>
+<td style="white-space:normal;max-width:420px">CVR 19–35%, still strong. Recent dip but recovering.</td>
+<td style="color:#888;font-size:.78rem">Bingo, Solitaire, GinRummy (new May 18)</td>
+</tr>
+<tr>
+<td class="mono">vc-22482</td>
+<td><span class="flag-badge" style="background:#3a1414;color:#D64545;border:1px solid #D64545">SCALE DOWN</span></td>
+<td style="white-space:normal;max-width:420px">Was 33–36% CVR in W5-W8, collapsed to 15–19% in W1-W4. Quality halved.</td>
+<td style="color:#888;font-size:.78rem">Bingo, Solitaire, GinRummy (new May 18)</td>
+</tr>
+<tr>
+<td class="mono">vc-20229</td>
+<td><span class="flag-badge" style="background:#3a1414;color:#D64545;border:1px solid #D64545">SCALE DOWN</span></td>
+<td style="white-space:normal;max-width:420px">Volume leader (428–828 logins/wk) but CVR cratered 24%→10%. Biggest quality drag.</td>
+<td style="color:#888;font-size:.78rem">Bingo, Solitaire, GinRummy (new May 18)</td>
+</tr>
+<tr>
+<td class="mono">vc-36755</td>
+<td><span class="flag-badge" style="background:#2a0a0a;color:#c0392b;border:1px solid #c0392b">PAUSE</span></td>
+<td style="white-space:normal;max-width:420px">Chronically weak 5–9% CVR. 300–1029 logins/wk wasted.</td>
+<td style="color:#888;font-size:.78rem">Bingo, Solitaire, GinRummy (new May 18)</td>
+</tr>
+<tr>
+<td class="mono">vc-32188</td>
+<td><span class="flag-badge" style="background:#3a1414;color:#D64545;border:1px solid #D64545">SCALE DOWN</span></td>
+<td style="white-space:normal;max-width:420px">5–12% CVR. Weak and volatile.</td>
+<td style="color:#888;font-size:.78rem">Bingo, Solitaire, GinRummy (new May 18)</td>
+</tr>
+<tr>
+<td class="mono">vc-26555</td>
+<td><span class="flag-badge" style="background:#2a0a0a;color:#c0392b;border:1px solid #c0392b">PAUSE</span></td>
+<td style="white-space:normal;max-width:420px">Near-zero CVR (0–10%). Dormant quality.</td>
+<td style="color:#888;font-size:.78rem">Bingo, Solitaire, GinRummy (new May 18)</td>
+</tr>
+<tr>
+<td class="mono">vc-18478</td>
+<td><span class="flag-badge" style="background:#2a0a0a;color:#c0392b;border:1px solid #c0392b">PAUSE</span></td>
+<td style="white-space:normal;max-width:420px">CVR collapsed to 0% in W1-W4. Pause immediately.</td>
+<td style="color:#888;font-size:.78rem">Bingo, Solitaire, GinRummy (new May 18)</td>
+</tr>
+<tr>
+<td class="mono">vc-2961</td>
+<td><span class="flag-badge" style="background:#2e1e06;color:#E8A33D;border:1px solid #E8A33D">MONITOR</span></td>
+<td style="white-space:normal;max-width:420px">Declining trend (27%→13%). Watch for further decay.</td>
+<td style="color:#888;font-size:.78rem">Bingo, Solitaire, GinRummy (new May 18)</td>
+</tr>
+<tr>
+<td class="mono">vc-19490</td>
+<td><span class="flag-badge" style="background:#111827;color:#5B7FDB;border:1px solid #5B7FDB">MAINTAIN</span></td>
+<td style="white-space:normal;max-width:420px">Small but volatile quality. 17–34% CVR. Monitor.</td>
+<td style="color:#888;font-size:.78rem">Bingo, Solitaire, GinRummy (new May 18)</td>
+</tr>
+</tbody></table>
+<h3 style="margin-top:14px"><span class="channel-maf">●</span> MyAppFree</h3>
+<table><thead><tr><th>SiteID</th><th>Action</th><th>Rationale</th><th>Campaigns Affected</th></tr></thead><tbody>
+<tr>
+<td class="mono">3739</td>
+<td><span class="flag-badge" style="background:#0e2e1e;color:#4AAB7E;border:1px solid #4AAB7E">SCALE UP</span></td>
+<td style="white-space:normal;max-width:420px">Dominant siteid. CVR improved 15.8%→27.8% over 8 weeks. 1,300+ logins/wk. Primary growth lever.</td>
+<td style="color:#888;font-size:.78rem">Bingo, Solitaire, GinRummy (organic reinstalls)</td>
+</tr>
+<tr>
+<td class="mono">2469</td>
+<td><span class="flag-badge" style="background:#111827;color:#5B7FDB;border:1px solid #5B7FDB">MAINTAIN</span></td>
+<td style="white-space:normal;max-width:420px">Small volume, moderate quality (10–20% CVR). No action needed.</td>
+<td style="color:#888;font-size:.78rem">Bingo, Solitaire, GinRummy (organic reinstalls)</td>
+</tr>
+</tbody></table>
+<h3 style="margin-top:14px"><span class="channel-adc">●</span> AdAction</h3>
+<table><thead><tr><th>SiteID</th><th>Action</th><th>Rationale</th><th>Campaigns Affected</th></tr></thead><tbody>
+<tr>
+<td class="mono">329830666</td>
+<td><span class="flag-badge" style="background:#0e2e1e;color:#4AAB7E;border:1px solid #4AAB7E">SCALE UP</span></td>
+<td style="white-space:normal;max-width:420px">Main siteid. CVR 10.6%→16.1% W5-W8 to 21.5%→16.1% W1-W4. Quality turning.</td>
+<td style="color:#888;font-size:.78rem">Bingo, Solitaire</td>
+</tr>
+<tr>
+<td class="mono">329825370</td>
+<td><span class="flag-badge" style="background:#0e2e1e;color:#4AAB7E;border:1px solid #4AAB7E">SCALE UP</span></td>
+<td style="white-space:normal;max-width:420px">Newly scaled May 18-25. CVR 18-22%. Promising. Increase budget test.</td>
+<td style="color:#888;font-size:.78rem">Bingo, Solitaire</td>
+</tr>
+<tr>
+<td class="mono">329831306</td>
+<td><span class="flag-badge" style="background:#111827;color:#5B7FDB;border:1px solid #5B7FDB">MAINTAIN</span></td>
+<td style="white-space:normal;max-width:420px">Excellent quality (15–42% CVR) but volume tiny and shrinking. Try to increase allocation.</td>
+<td style="color:#888;font-size:.78rem">Bingo, Solitaire</td>
+</tr>
+</tbody></table>
+</div>
+
+<div class="panel">
+<h2>📌 Channel-Level Recommendations</h2>
+<table>
+<thead><tr><th>Channel</th><th>Action</th><th>Key Signal</th><th>Campaigns</th></tr></thead>
+<tbody>
+<tr><td><span class="channel-adc">●</span> <strong>AdAction Bingo</strong></td>
+<td><span class="flag-badge" style="background:#0e2e1e;color:#4AAB7E;border:1px solid #4AAB7E">SCALE UP</span></td>
+<td style="white-space:normal">CVR jumped from 12.9% avg (W5-W8) to 21.4% avg (W1-W4). Lvl>20 also up 15.5%→19%. Now tracking <em>above</em> platform CVR benchmark (16.2%).</td>
+<td style="color:#888">mcspapac_Mplus_AdAction_Bingo_*</td>
+</tr>
+<tr><td><span class="channel-maf">●</span> <strong>MyAppFree Solitaire</strong></td>
+<td><span class="flag-badge" style="background:#0e2e1e;color:#4AAB7E;border:1px solid #4AAB7E">SCALE UP</span></td>
+<td style="white-space:normal">CVR improved 18.6%→24.5%. Spend halved ($41K→$18K/wk) yet quality rose — scaling back up could recover volume at better quality. Site 3739 is the engine.</td>
+<td style="color:#888">mcspapac_Mplus_MyAppFre_Solitaire_*</td>
+</tr>
+<tr><td><span class="channel-maf">●</span> <strong>MyAppFree Bingo</strong></td>
+<td><span class="flag-badge" style="background:#111827;color:#5B7FDB;border:1px solid #5B7FDB">MAINTAIN</span></td>
+<td style="white-space:normal">CVR stable ~22%. Spend reduced from $13K→$6K/wk. Quality holds but recent slight dip (18.7% May 25). Hold spend, monitor.</td>
+<td style="color:#888">mcspapac_Mplus_MyAppFre_Bingo_*</td>
+</tr>
+<tr><td><span class="channel-ibx">●</span> <strong>InboxDollars Bingo</strong></td>
+<td><span class="flag-badge" style="background:#2e1e06;color:#E8A33D;border:1px solid #E8A33D">MONITOR</span></td>
+<td style="white-space:normal">Spend stable ~$19K/wk but CVR declining: 17.8% (Apr 6) → 13.0% (May 25). Now at platform level. Mix shift to vc-20229 and vc-36755 (both &lt;10% CVR) is the root cause.</td>
+<td style="color:#888">mcspapac_Mplus_Inboxdollar_Bingo_*</td>
+</tr>
+<tr><td><span class="channel-ibx">●</span> <strong>InboxDollars Solitaire</strong></td>
+<td><span class="flag-badge" style="background:#3a1414;color:#D64545;border:1px solid #D64545">SCALE DOWN</span></td>
+<td style="white-space:normal">CVR 18.9%→11.9%, Lvl 17.8%→11.0%. Both below platform. Trend consistently negative. Reallocate to AdAction Bingo or MyAppFree Solitaire.</td>
+<td style="color:#888">mcspapac_Mplus_Inboxdollar_Solitaire_*</td>
+</tr>
+<tr><td><span class="channel-ibx">●</span> <strong>InboxDollars GinRummy</strong></td>
+<td><span class="flag-badge" style="background:#3a1414;color:#D64545;border:1px solid #D64545">SCALE DOWN</span></td>
+<td style="white-space:normal">New campaign May 18 with CVR 5.87% (extremely poor). Improved to 12.2% May 25 but still below platform 16.2%. High reinstall rate 35–38%. Needs siteid investigation before scaling.</td>
+<td style="color:#888">mcspapac_Mplus_Inboxdollar_GinRummy_*</td>
+</tr>
+<tr><td><span class="channel-frc">●</span> <strong>FreeCash GinRummy</strong></td>
+<td><span class="flag-badge" style="background:#111827;color:#5B7FDB;border:1px solid #5B7FDB">RESUME / TEST</span></td>
+<td style="white-space:normal">Effectively paused since May 11. When active, quality was excellent: CVR 17–30%, ROAS peaked at 32.3%. Was the best-performing channel on ROAS when live. Recommend reactivating test budget.</td>
+<td style="color:#888">mcspapac_Mplus_Freecash_GinRummy_*</td>
+</tr>
+<tr><td><span class="channel-adc">●</span> <strong>AdAction Solitaire</strong></td>
+<td><span class="flag-badge" style="background:#2e1e06;color:#E8A33D;border:1px solid #E8A33D">MONITOR</span></td>
+<td style="white-space:normal">Recent uptick: CVR 11–12%→16% in May 18-25. Below platform historically but turning. Watch two more weeks before scaling. Siteid 329830666 driving recovery.</td>
+<td style="color:#888">mcspapac_Mplus_AdAction_Solitaire_*</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+
+<script>
+const WEEKS = ["2026-04-06", "2026-04-13", "2026-04-20", "2026-04-27", "2026-05-04", "2026-05-11", "2026-05-18", "2026-05-25"];
+const WL = ["Apr 6", "Apr 13", "Apr 20", "Apr 27", "May 4", "May 11", "May 18", "May 25"];
+const COLORS = {InboxDollars:'#D64545',MyAppFree:'#E8A33D',AdAction:'#5B7FDB',FreeCash:'#4AAB7E',Platform:'#888888'};
+const CH = {"InboxDollars": {"spend": [28073, 47553, 40752, 43655, 35824, 37327, 51071, 46401], "cvr": [18.3, 14.2, 12.6, 15.1, 15.5, 16.1, 11.7, 12.5], "lvl": [17.7, 13.8, 11.8, 13.2, 14.5, 15.0, 12.1, 11.6], "roas": [8.7, 2.4, 3.5, 3.7, 6.0, 6.2, 2.7, 6.5]}, "MyAppFree": {"spend": [36660, 38496, 43416, 46963, 20580, 16006, 16436, 22362], "cvr": [16.1, 19.4, 20.6, 20.9, 24.8, 22.9, 23.6, 24.8], "lvl": [15.0, 15.1, 14.0, 16.5, 19.0, 20.8, 18.4, 20.6], "roas": [4.3, 4.1, 3.6, 5.0, 5.8, 7.9, 7.4, 7.3]}, "AdAction": {"spend": [14809, 19614, 15296, 21266, 20556, 21391, 13515, 16537], "cvr": [12.9, 12.2, 12.7, 13.8, 15.5, 15.1, 17.4, 16.8], "lvl": [15.7, 16.9, 14.3, 15.2, 16.4, 19.3, 17.9, 17.2], "roas": [2.8, 2.3, 4.0, 1.8, 2.6, 5.5, -4.4, 5.9]}, "FreeCash": {"spend": [8229, 6701, 5947, 5752, 7405, 2845, 54, 33], "cvr": [16.9, 21.4, 24.4, 28.7, 20.7, 19.6, null, null], "lvl": [15.5, 17.7, 19.2, 21.5, 17.7, 19.9, null, null], "roas": [7.6, 14.7, 26.9, 14.3, 11.5, 28.5, null, null]}};
+const PLAT = {"cvr": [17.13, 17.05, 16.84, 18.98, 18.23, 17.05, 15.71, 16.23], "lvl": [23.27, 21.4, 19.83, 22.55, 22.32, 22.65, 20.25, 19.38]};
+const CAT = {"InboxDollars": {"Bingo": {"spend": [15645, 25557, 19905, 20577, 15966, 17000, 19772, 20743], "cvr": [17.77, 14.8, 13.04, 17.05, 16.73, 16.74, 14.37, 13.02], "lvl": [17.6, 13.25, 11.68, 14.5, 15.78, 16.55, 14.17, 11.64], "roas": [7.1, 4.0, 4.2, 5.4, 7.5, 6.6, 4.0, 8.4]}, "Solitaire": {"spend": [12428, 21996, 20847, 23078, 19858, 20327, 19499, 18958], "cvr": [18.95, 13.33, 12.23, 13.53, 14.58, 15.64, 11.31, 11.94], "lvl": [17.84, 14.51, 12.0, 12.13, 13.51, 13.64, 10.25, 10.99], "roas": [10.6, 0.6, 2.9, 2.2, 4.7, 5.9, 2.2, 6.5]}, "GinRummy": {"spend": [0, 0, 0, 0, 0, 0, 11800, 6700], "cvr": [null, null, null, null, null, null, 5.87, 12.2], "lvl": [null, null, null, null, null, null, 11.5, 15.76], "roas": [null, null, null, null, null, null, 1.1, 1.0]}}, "MyAppFree": {"Bingo": {"spend": [10440, 12069, 9123, 18236, 6435, 5104, 5741, 5894], "cvr": [18.02, 25.64, 25.06, 20.08, 26.07, 22.26, 20.41, 18.73], "lvl": [23.8, 25.0, 21.88, 20.48, 27.73, 23.0, 17.11, 17.7], "roas": [4.0, 4.1, 2.3, 7.4, 7.6, 8.9, 7.0, 7.6]}, "Solitaire": {"spend": [26220, 26427, 34293, 28727, 14145, 10902, 10695, 16468], "cvr": [15.46, 17.75, 19.6, 21.42, 24.21, 19.44, 18.95, 24.52], "lvl": [12.27, 11.93, 12.09, 13.98, 15.43, 16.96, 13.9, 16.98], "roas": [4.4, 3.1, 3.9, 3.4, 5.1, 6.8, 4.6, 2.2]}, "GinRummy": {"spend": [0, 0, 0, 0, 0, 0, 0, 0], "cvr": [null, null, null, null, null, 39.09, 30.73, 28.18], "lvl": [null, null, null, null, null, 34.21, 24.91, 26.91], "roas": [null, null, null, null, null, null, null, null]}}, "AdAction": {"Bingo": {"spend": [6376, 6064, 4689, 9773, 8124, 9649, 4323, 4052], "cvr": [12.87, 11.36, 13.36, 16.77, 22.86, 20.89, 22.22, 19.64], "lvl": [16.29, 18.24, 15.92, 19.12, 24.31, 25.74, 25.62, 20.27], "roas": [1.6, 1.3, 3.9, 1.6, 5.3, 8.1, 8.3, 1.5]}, "Solitaire": {"spend": [8433, 13550, 10607, 11493, 12432, 11742, 9192, 12485], "cvr": [12.92, 12.53, 12.24, 11.75, 11.42, 11.87, 16.02, 16.07], "lvl": [15.33, 16.29, 13.32, 12.68, 11.92, 15.63, 15.69, 16.5], "roas": [3.7, 2.7, 4.0, 2.0, 0.8, 3.5, -10.4, 7.3]}}, "FreeCash": {"GinRummy": {"spend": [5534, 4820, 4363, 4850, 5645, 2064, 32, 11], "cvr": [17.51, 23.08, 26.26, 30.43, 21.24, 20.81, null, null], "lvl": [15.08, 18.4, 19.31, 22.6, 17.23, 21.43, null, null], "roas": [9.2, 19.0, 32.3, 16.3, 9.1, 38.1, null, null]}, "Solitaire": {"spend": [2695, 1881, 1584, 902, 1760, 781, 22, 22], "cvr": [15.61, 16.99, 19.15, 18.99, 18.75, 16.0, null, null], "lvl": [16.36, 16.08, 18.75, 15.94, 19.23, 15.87, null, null], "roas": [4.2, 3.8, 12.0, 3.6, 19.1, 3.2, null, null]}}};
+const SID = {"InboxDollars": {"vc-18936": {"logins": [231, 188, 161, 137, 131, 160, 149, 230], "cvr": [28.14, 29.26, 23.6, 21.9, 28.24, 31.87, 26.85, 22.17], "lvl": [23.98, 25.14, 21.92, 18.64, 24.17, 26.39, 25.38, 22.92]}, "vc-22484": {"logins": [60, 94, 116, 100, 113, 159, 143, 108], "cvr": [25.0, 28.72, 35.34, 38.0, 30.97, 26.42, 19.58, 21.3], "lvl": [22.41, 30.43, 32.38, 36.56, 33.33, 26.17, 18.18, 16.67]}, "vc-22482": {"logins": [75, 91, 93, 117, 176, 391, 395, 231], "cvr": [34.67, 32.97, 33.33, 35.9, 19.32, 14.58, 18.73, 15.15], "lvl": [34.29, 41.46, 35.71, 32.38, 23.13, 17.27, 19.19, 15.94]}, "vc-20229": {"logins": [218, 226, 299, 296, 431, 675, 776, 828], "cvr": [22.02, 23.01, 17.06, 24.66, 18.56, 16.44, 10.44, 10.27], "lvl": [24.38, 20.75, 14.87, 18.73, 16.02, 13.29, 9.32, 9.3]}, "vc-36755": {"logins": [314, 690, 1029, 953, 676, 418, 518, 591], "cvr": [5.41, 5.07, 5.64, 7.14, 8.73, 8.61, 6.37, 7.95], "lvl": [5.07, 3.81, 5.41, 5.81, 7.12, 6.86, 5.3, 5.82]}, "vc-32188": {"logins": [127, 120, 55, 158, 172, 60, 199, 383], "cvr": [9.45, 5.0, 10.91, 5.7, 6.98, 10.0, 8.54, 12.01], "lvl": [7.44, 1.74, 5.56, 5.33, 5.59, 8.77, 10.91, 8.23]}, "vc-2961": {"logins": [61, 41, 50, 34, 32, 30, 49, 110], "cvr": [22.95, 26.83, 28.0, 17.65, 28.13, 20.0, 14.29, 12.73], "lvl": [30.19, 39.47, 38.1, 20.69, 31.03, 17.39, 19.51, 22.78]}, "vc-19490": {"logins": [42, 54, 41, 46, 39, 52, 37, 53], "cvr": [26.19, 16.67, 21.95, 28.26, 20.51, 17.31, 24.32, 33.96], "lvl": [17.5, 21.28, 19.44, 32.43, 14.29, 24.39, 12.5, 40.0]}, "vc-26555": {"logins": [48, 55, 50, 45, 25, 35, 39, 48], "cvr": [4.17, 3.64, 4.0, 6.67, 0.0, 2.86, 10.26, 2.08], "lvl": [6.67, 2.04, 11.63, 2.78, 0.0, 10.34, 12.12, 2.78]}, "vc-18478": {"logins": [57, 171, 221, 12, 9, 11, 8, 8], "cvr": [7.02, 7.02, 4.07, 0.0, 0.0, 0.0, 0.0, 0.0], "lvl": [5.56, 6.67, 3.54, 9.09, 0.0, 9.09, 0.0, 0.0]}}, "MyAppFree": {"3739": {"logins": [1307, 1324, 1584, 1362, 762, 692, 888, 1326], "cvr": [15.84, 20.09, 21.59, 22.98, 26.77, 25.29, 26.58, 27.83], "lvl": [12.97, 14.48, 13.88, 15.62, 19.38, 22.5, 20.03, 22.82]}, "2469": {"logins": [4, 21, 40, 51, 36, 41, 39, 49], "cvr": [0.0, 14.29, 12.5, 9.8, 11.11, 19.51, 17.95, 12.24], "lvl": [0.0, 11.11, 10.71, 8.7, 17.24, 15.63, 17.24, 14.71]}}, "AdAction": {"329830666": {"logins": [225, 214, 339, 439, 463, 319, 144, 335], "cvr": [11.56, 9.35, 10.62, 11.16, 14.9, 14.73, 21.53, 16.12], "lvl": [12.21, 10.95, 10.58, 12.16, 14.92, 20.61, 22.05, 14.37]}, "329825370": {"logins": [12, 12, 15, 12, 28, 100, 233, 236], "cvr": [0.0, 8.33, 6.67, 8.33, 21.43, 14.0, 18.45, 21.61], "lvl": [8.33, 12.5, 0.0, 18.18, 27.27, 18.07, 16.26, 22.12]}, "329831306": {"logins": [53, 98, 125, 120, 40, 26, 16, 12], "cvr": [16.98, 15.31, 13.6, 23.33, 22.5, 23.08, 31.25, 41.67], "lvl": [29.17, 20.48, 19.23, 24.0, 31.25, 33.33, 25.0, 36.36]}}};
+
+const chartOpts = (yLabel) => ({
+  responsive:true, maintainAspectRatio:false,
+  plugins:{legend:{labels:{color:'#aaa',font:{family:'JetBrains Mono',size:11}}},tooltip:{backgroundColor:'#222',titleColor:'#fff',bodyColor:'#ccc'}},
+  scales:{
+    x:{ticks:{color:'#888',font:{family:'JetBrains Mono',size:10}},grid:{color:'#1e1e1e'}},
+    y:{ticks:{color:'#888',font:{family:'JetBrains Mono',size:10}},grid:{color:'#1e1e1e'},title:{display:!!yLabel,text:yLabel,color:'#666',font:{size:11}}}
+  }
+});
+
+// Panel I — Stacked spend
+new Chart(document.getElementById('spendChart'), {
+  type:'bar',
+  data:{
+    labels:WL,
+    datasets:[
+      {label:'InboxDollars',data:CH.InboxDollars.spend,backgroundColor:'#D64545cc',stack:'a'},
+      {label:'MyAppFree',data:CH.MyAppFree.spend,backgroundColor:'#E8A33Dcc',stack:'a'},
+      {label:'AdAction',data:CH.AdAction.spend,backgroundColor:'#5B7FDBcc',stack:'a'},
+      {label:'FreeCash',data:CH.FreeCash.spend,backgroundColor:'#4AAB7Ecc',stack:'a'}
+    ]
+  },
+  options:{...chartOpts('Spend ($)'),plugins:{...chartOpts().plugins,tooltip:{callbacks:{label:(c)=>' '+c.dataset.label+': $'+c.raw.toLocaleString()}}}}
+});
+
+// Panel II — CVR
+new Chart(document.getElementById('cvrChart'), {
+  type:'line',
+  data:{
+    labels:WL,
+    datasets:[
+      {label:'InboxDollars',data:CH.InboxDollars.cvr,borderColor:'#D64545',backgroundColor:'transparent',tension:.3,pointRadius:4,spanGaps:true},
+      {label:'MyAppFree',data:CH.MyAppFree.cvr,borderColor:'#E8A33D',backgroundColor:'transparent',tension:.3,pointRadius:4,spanGaps:true},
+      {label:'AdAction',data:CH.AdAction.cvr,borderColor:'#5B7FDB',backgroundColor:'transparent',tension:.3,pointRadius:4,spanGaps:true},
+      {label:'FreeCash',data:CH.FreeCash.cvr,borderColor:'#4AAB7E',backgroundColor:'transparent',tension:.3,pointRadius:4,spanGaps:true},
+      {label:'Platform',data:PLAT.cvr,borderColor:'#888',backgroundColor:'transparent',borderDash:[5,3],tension:.2,pointRadius:2,spanGaps:true}
+    ]
+  },
+  options:chartOpts('CVR %')
+});
+
+// Panel II — Lvl
+new Chart(document.getElementById('lvlChart'), {
+  type:'line',
+  data:{
+    labels:WL,
+    datasets:[
+      {label:'InboxDollars',data:CH.InboxDollars.lvl,borderColor:'#D64545',backgroundColor:'transparent',tension:.3,pointRadius:4,spanGaps:true},
+      {label:'MyAppFree',data:CH.MyAppFree.lvl,borderColor:'#E8A33D',backgroundColor:'transparent',tension:.3,pointRadius:4,spanGaps:true},
+      {label:'AdAction',data:CH.AdAction.lvl,borderColor:'#5B7FDB',backgroundColor:'transparent',tension:.3,pointRadius:4,spanGaps:true},
+      {label:'FreeCash',data:CH.FreeCash.lvl,borderColor:'#4AAB7E',backgroundColor:'transparent',tension:.3,pointRadius:4,spanGaps:true},
+      {label:'Platform',data:PLAT.lvl,borderColor:'#888',backgroundColor:'transparent',borderDash:[5,3],tension:.2,pointRadius:2,spanGaps:true}
+    ]
+  },
+  options:chartOpts('Lvl>20 %')
+});
+
+// Panel III
+let p3Chart = null;
+function renderP3() {
+  const ch = document.getElementById('ch3').value;
+  const cat = document.getElementById('cat3').value;
+  const col = COLORS[ch];
+  let spend, cvr, lvl, roas;
+  if (cat === 'Overall') {
+    spend = CH[ch].spend; cvr = CH[ch].cvr; lvl = CH[ch].lvl; roas = CH[ch].roas;
+  } else {
+    const catObj = CAT[ch] && CAT[ch][cat];
+    if (!catObj) { if(p3Chart){p3Chart.destroy();p3Chart=null;} return; }
+    spend=catObj.spend; cvr=catObj.cvr; lvl=catObj.lvl; roas=catObj.roas;
+  }
+  if (p3Chart) p3Chart.destroy();
+  p3Chart = new Chart(document.getElementById('p3Chart'), {
+    type:'bar',
+    data:{
+      labels:WL,
+      datasets:[
+        {label:'Spend ($)',data:spend,backgroundColor:col+'44',borderColor:col+'88',borderWidth:1,yAxisID:'y',type:'bar'},
+        {label:'D7 CVR %',data:cvr,borderColor:col,backgroundColor:'transparent',tension:.3,pointRadius:4,yAxisID:'y2',type:'line',spanGaps:true},
+        {label:'Lvl>20 %',data:lvl,borderColor:'#888',backgroundColor:'transparent',tension:.3,pointRadius:4,yAxisID:'y2',type:'line',borderDash:[4,2],spanGaps:true},
+        {label:'D7 ROAS %',data:roas,borderColor:'#fff5',backgroundColor:'transparent',tension:.3,pointRadius:3,yAxisID:'y3',type:'line',borderDash:[2,4],spanGaps:true}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#aaa',font:{family:'JetBrains Mono',size:11}}},tooltip:{backgroundColor:'#222',titleColor:'#fff',bodyColor:'#ccc'}},
+      scales:{
+        x:{ticks:{color:'#888',font:{family:'JetBrains Mono',size:10}},grid:{color:'#1e1e1e'}},
+        y:{position:'left',ticks:{color:'#888',font:{family:'JetBrains Mono',size:10},callback:(v)=>'$'+v.toLocaleString()},grid:{color:'#1e1e1e'}},
+        y2:{position:'right',ticks:{color:'#aaa',font:{family:'JetBrains Mono',size:10},callback:(v)=>v+'%'},grid:{display:false}},
+        y3:{display:false}
+      }
+    }
+  });
+}
+renderP3();
+
+// Panel IV
+let p4Chart = null;
+function renderP4() {
+  const ch = document.getElementById('ch4').value;
+  const met = document.getElementById('met4').value;
+  const sids = SID[ch];
+  if (!sids) return;
+  const palette = ['#D64545','#E8A33D','#5B7FDB','#4AAB7E','#9B59B6','#3498DB','#E74C3C','#F39C12','#1ABC9C','#8E44AD'];
+  const datasets = Object.entries(sids).map(([sid, d], i) => ({
+    label: sid,
+    data: d[met],
+    borderColor: palette[i % palette.length],
+    backgroundColor: 'transparent',
+    tension: .3,
+    pointRadius: 3,
+    spanGaps: true
+  }));
+  if (p4Chart) p4Chart.destroy();
+  p4Chart = new Chart(document.getElementById('p4Chart'), {
+    type:'line',
+    data:{ labels:WL, datasets },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#aaa',font:{family:'JetBrains Mono',size:10}}},tooltip:{backgroundColor:'#222',titleColor:'#fff',bodyColor:'#ccc'}},
+      scales:{
+        x:{ticks:{color:'#888',font:{family:'JetBrains Mono',size:10}},grid:{color:'#1e1e1e'}},
+        y:{ticks:{color:'#888',font:{family:'JetBrains Mono',size:10},callback:(v)=>v+(met==='logins'?'':'%')},grid:{color:'#1e1e1e'}}
+      }
+    }
+  });
+}
+renderP4();
+</script>
+</div></body></html>
