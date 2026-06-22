@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MPL Incent Channel Deep Dive — Week of Jun 8, 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --inbox: #D64545; --myapp: #E8A33D; --adaction: #5B7FDB;
+    --freecash: #4AAB7E; --kashkick: #9B59B6; --platform: #888;
+    --bg: #fafafa; --card: #fff; --border: #111;
+    --green: #1a7a4a; --red: #c0392b; --neutral: #555;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'JetBrains Mono', monospace; background: var(--bg); color: #111; font-size: 13px; }
+  h1,h2,h3 { font-family: 'Fraunces', serif; }
+  .page { max-width: 1280px; margin: 0 auto; padding: 24px 20px; }
+
+  /* HEADER */
+  .header { border-bottom: 3px solid #111; padding-bottom: 16px; margin-bottom: 28px; }
+  .header h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+  .header-meta { display: flex; gap: 24px; margin-top: 8px; flex-wrap: wrap; }
+  .meta-pill { background: #111; color: #fff; padding: 3px 10px; font-size: 11px; border-radius: 2px; }
+  .meta-pill.warn { background: #e67e22; }
+  .meta-pill.ok { background: #1a7a4a; }
+  .meta-pill.danger { background: var(--red); }
+
+  /* SECTION */
+  .section { margin-bottom: 36px; }
+  .section-title { font-family: 'Fraunces', serif; font-size: 15px; font-weight: 600; border-bottom: 1px solid #111; padding-bottom: 6px; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* PANELS */
+  .panel { background: var(--card); border: 1px solid #ddd; border-top: 3px solid #111; padding: 18px; margin-bottom: 20px; }
+  .panel-title { font-family: 'Fraunces', serif; font-size: 13px; font-weight: 600; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.8px; color: #444; }
+  .chart-wrap { position: relative; }
+
+  /* GRID */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media(max-width:768px){ .grid-2 { grid-template-columns: 1fr; } }
+
+  /* CHIPS */
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .chip { padding: 5px 12px; border: 2px solid #111; cursor: pointer; font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: 600; background: #fff; transition: all 0.15s; border-radius: 2px; }
+  .chip.active { color: #fff; }
+  .chip[data-ch="inboxdollars_int"] { border-color: var(--inbox); }
+  .chip[data-ch="inboxdollars_int"].active { background: var(--inbox); }
+  .chip[data-ch="myappfre_int"] { border-color: var(--myapp); }
+  .chip[data-ch="myappfre_int"].active { background: var(--myapp); color: #111; }
+  .chip[data-ch="adaction5_int"] { border-color: var(--adaction); }
+  .chip[data-ch="adaction5_int"].active { background: var(--adaction); }
+  .chip[data-ch="freecash_int"] { border-color: var(--freecash); }
+  .chip[data-ch="freecash_int"].active { background: var(--freecash); }
+
+  /* SELECT */
+  select { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 4px 8px; border: 1px solid #111; background: #fff; cursor: pointer; }
+
+  /* COMPARISON TABLES */
+  .cmp-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .cmp-table th { background: #111; color: #fff; padding: 6px 10px; text-align: left; font-weight: 600; font-family: 'Fraunces', serif; font-size: 11px; letter-spacing: 0.5px; }
+  .cmp-table td { padding: 7px 10px; border-bottom: 1px solid #eee; vertical-align: middle; }
+  .cmp-table tr:last-child td { border-bottom: none; }
+  .cmp-table tr:hover td { background: #f5f5f5; }
+  .cmp-table .num { text-align: right; }
+  .delta { font-size: 11px; padding: 1px 5px; border-radius: 2px; }
+  .delta.up { color: var(--green); }
+  .delta.dn { color: var(--red); }
+  .delta.fl { color: var(--neutral); }
+
+  /* ROAS coloring */
+  .roas-green { color: var(--green); font-weight: 600; }
+  .roas-red { color: var(--red); font-weight: 600; }
+  .roas-neutral { color: var(--neutral); }
+
+  /* SIGNAL BADGES */
+  .badge { display: inline-block; padding: 2px 7px; font-size: 10px; font-weight: 600; border-radius: 2px; font-family: 'Fraunces', serif; }
+  .badge.up { background: #d4edda; color: #155724; }
+  .badge.dn { background: #f8d7da; color: #721c24; }
+  .badge.watch { background: #fff3cd; color: #856404; }
+  .badge.pause { background: #e2e3e5; color: #383d41; }
+
+  /* SITEID TABLE */
+  .site-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .site-table th { background: #222; color: #fff; padding: 5px 8px; text-align: left; font-family: 'Fraunces', serif; font-size: 10px; letter-spacing: 0.5px; position: sticky; top: 0; }
+  .site-table td { padding: 5px 8px; border-bottom: 1px solid #eee; }
+  .site-table tr:hover td { background: #f9f9f9; }
+  .site-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .site-scroll { max-height: 420px; overflow-y: auto; border: 1px solid #ddd; }
+
+  /* W1 vs W2 */
+  .wk-box { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .wk-card { border: 1px solid #ddd; border-left: 4px solid; padding: 14px; background: #fff; }
+  .wk-card h4 { font-family: 'Fraunces', serif; font-size: 13px; margin-bottom: 10px; }
+  .wk-metric { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px; }
+  .wk-metric label { color: #666; }
+  .wk-metric .val { font-weight: 600; }
+
+  /* LEGEND */
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; font-size: 11px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .legend-line { width: 16px; height: 2px; }
+
+  /* ANNOTATION */
+  .annotation { background: #fffaeb; border-left: 3px solid #f39c12; padding: 8px 12px; font-size: 11px; margin-bottom: 12px; color: #7a5800; }
+
+  /* RECOMMENDATION SECTION */
+  .rec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media(max-width:768px){ .rec-grid { grid-template-columns: 1fr; } }
+  .rec-card { border: 1px solid #ddd; padding: 14px; }
+  .rec-card h4 { font-family: 'Fraunces', serif; font-size: 12px; margin-bottom: 8px; }
+  .rec-list { list-style: none; }
+  .rec-list li { padding: 4px 0; border-bottom: 1px solid #f0f0f0; font-size: 11px; display: flex; justify-content: space-between; align-items: center; }
+  .rec-list li:last-child { border-bottom: none; }
+
+  .footer { border-top: 1px solid #ddd; padding-top: 12px; margin-top: 24px; font-size: 10px; color: #888; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- HEADER -->
+<div class="header">
+  <h1>MPL Incent Channel Deep Dive</h1>
+  <div style="font-size:12px; color:#555; margin-top:4px;">Analysis run: Jun 22, 2026 &nbsp;|&nbsp; Latest matured week: Jun 8–14, 2026 &nbsp;|&nbsp; US only &nbsp;|&nbsp; D7 metrics</div>
+  <div class="header-meta">
+    <span class="meta-pill">Last 4 matured weeks: May 18 – Jun 14</span>
+    <span class="meta-pill">Comparison: Apr 20 – May 17 (W5–W8)</span>
+    <span class="meta-pill warn">InboxDollars: vc-20229 &amp; vc-36755 dragging quality</span>
+    <span class="meta-pill ok">MyAppFree 3739: best performing siteid</span>
+    <span class="meta-pill danger">FreeCash paused since May 18</span>
+  </div>
+</div>
+
+<div class="annotation">
+  ⚠️ <strong>InboxDollars reporting change (Mar 23, 2026):</strong> Switched from single <code>Prodege</code> siteid to <code>vc-*</code> codes. Do not compare pre/post siteid metrics — this is a provider reporting change, not an acquisition event.
+</div>
+
+<!-- PANEL I: STACKED SPEND -->
+<div class="section">
+  <div class="section-title">Panel I — Weekly Spend by Channel</div>
+  <div class="panel">
+    <div class="panel-title">Total Incent Spend — 8 Weeks (Apr 20 – Jun 14, 2026)</div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--inbox)"></div> InboxDollars</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--myapp)"></div> MyAppFree</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--adaction)"></div> AdAction</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--freecash)"></div> FreeCash</div>
+    </div>
+    <div class="chart-wrap" style="height:260px">
+      <canvas id="spendChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- PANEL II: QUALITY LINE CHARTS -->
+<div class="section">
+  <div class="section-title">Panel II — D7 Quality Metrics (Channel vs Platform)</div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-title">D7 Depositor CVR % (Full Login Cohort)</div>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="cvrChart"></canvas>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">D7 Level &gt;20 % (Player Logins Only)</div>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="lvlChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PANEL III: CHANNEL DEEP DIVE -->
+<div class="section">
+  <div class="section-title">Panel III — Channel Deep Dive</div>
+  <div class="panel">
+    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
+      <div class="chips" id="channelChips">
+        <button class="chip active" data-ch="inboxdollars_int">InboxDollars</button>
+        <button class="chip" data-ch="myappfre_int">MyAppFree</button>
+        <button class="chip" data-ch="adaction5_int">AdAction</button>
+        <button class="chip" data-ch="freecash_int">FreeCash</button>
+      </div>
+      <select id="catSelect">
+        <option value="Overall">Overall</option>
+        <option value="Bingo">Bingo</option>
+        <option value="Solitaire">Solitaire</option>
+        <option value="GinRummy">GinRummy</option>
+      </select>
+    </div>
+    <div class="chart-wrap" style="height:280px">
+      <canvas id="deepChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- PANEL IV: SITEID DRILLDOWN -->
+<div class="section">
+  <div class="section-title">Panel IV — SiteID Drilldown (≥200 Logins)</div>
+  <div class="panel">
+    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
+      <select id="siteChSelect">
+        <option value="inboxdollars_int">InboxDollars</option>
+        <option value="myappfre_int">MyAppFree</option>
+        <option value="adaction5_int">AdAction</option>
+      </select>
+      <select id="siteMetric">
+        <option value="cvr">D7 Dep CVR %</option>
+        <option value="lvl">D7 Lvl&gt;20 %</option>
+        <option value="logins">Logins (All)</option>
+      </select>
+    </div>
+    <div class="chart-wrap" style="height:280px">
+      <canvas id="siteChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- COMPARISON TABLE -->
+<div class="section">
+  <div class="section-title">Last 4 Weeks vs Last 5–8 Weeks — Channel Summary</div>
+  <div class="annotation">
+    Metrics aggregated across all categories per channel. Dep CVR uses full login cohort (no Player filter) as mandated since May 2026. ROAS = D7 CM1 / Spend × 100.
+  </div>
+  <div class="panel" style="overflow-x:auto;">
+    <table class="cmp-table">
+      <thead>
+        <tr>
+          <th>Channel</th>
+          <th class="num">Spend (Last 4w)</th>
+          <th class="num">Spend (5–8w)</th>
+          <th class="num">Δ Spend</th>
+          <th class="num">Dep CVR L4w</th>
+          <th class="num">Dep CVR 5–8w</th>
+          <th class="num">Δ CVR</th>
+          <th class="num">Lvl&gt;20 L4w</th>
+          <th class="num">Lvl&gt;20 5–8w</th>
+          <th class="num">Δ Lvl</th>
+          <th class="num">ROAS L4w</th>
+          <th class="num">ROAS 5–8w</th>
+          <th>Signal</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="background:#f8f8f8; font-style:italic;">
+          <td><strong>Platform</strong></td>
+          <td class="num">$1,030K</td>
+          <td class="num">$871K</td>
+          <td class="num"><span class="delta up">+18%</span></td>
+          <td class="num">16.05%</td>
+          <td class="num">17.78%</td>
+          <td class="num"><span class="delta dn">–1.73pp</span></td>
+          <td class="num">19.53%</td>
+          <td class="num">22.18%</td>
+          <td class="num"><span class="delta dn">–2.65pp</span></td>
+          <td class="num roas-neutral">9.3%</td>
+          <td class="num roas-neutral">11.1%</td>
+          <td><span class="badge watch">BASELINE</span></td>
+        </tr>
+        <tr>
+          <td><strong>InboxDollars</strong></td>
+          <td class="num">$209,878</td>
+          <td class="num">$157,558</td>
+          <td class="num"><span class="delta dn">+33%↑</span></td>
+          <td class="num">12.61%</td>
+          <td class="num">14.79%</td>
+          <td class="num"><span class="delta dn">–2.18pp</span></td>
+          <td class="num">11.10%</td>
+          <td class="num">13.56%</td>
+          <td class="num"><span class="delta dn">–2.46pp</span></td>
+          <td class="num roas-red">4.4%</td>
+          <td class="num roas-red">4.8%</td>
+          <td><span class="badge dn">CAUTION</span></td>
+        </tr>
+        <tr>
+          <td><strong>MyAppFree</strong></td>
+          <td class="num">$106,998</td>
+          <td class="num">$126,965</td>
+          <td class="num"><span class="delta up">–16%↓</span></td>
+          <td class="num">22.68%</td>
+          <td class="num">21.71%</td>
+          <td class="num"><span class="delta up">+0.97pp</span></td>
+          <td class="num">17.94%</td>
+          <td class="num">16.68%</td>
+          <td class="num"><span class="delta up">+1.26pp</span></td>
+          <td class="num roas-neutral">5.3%</td>
+          <td class="num roas-neutral">5.0%</td>
+          <td><span class="badge up">SCALE UP</span></td>
+        </tr>
+        <tr>
+          <td><strong>AdAction</strong></td>
+          <td class="num">$55,939</td>
+          <td class="num">$78,509</td>
+          <td class="num"><span class="delta up">–29%↓</span></td>
+          <td class="num">17.36%</td>
+          <td class="num">14.22%</td>
+          <td class="num"><span class="delta up">+3.14pp</span></td>
+          <td class="num">17.27%</td>
+          <td class="num">16.18%</td>
+          <td class="num"><span class="delta up">+1.09pp</span></td>
+          <td class="num roas-red">3.1%</td>
+          <td class="num roas-red">3.4%</td>
+          <td><span class="badge up">IMPROVING</span></td>
+        </tr>
+        <tr>
+          <td><strong>FreeCash</strong></td>
+          <td class="num">~$87</td>
+          <td class="num">$21,949</td>
+          <td class="num"><span class="delta dn">–99%</span></td>
+          <td class="num">n/a</td>
+          <td class="num">23.61%</td>
+          <td class="num">—</td>
+          <td class="num">n/a</td>
+          <td class="num">19.43%</td>
+          <td class="num">—</td>
+          <td class="num">—</td>
+          <td class="num roas-green">18.6%</td>
+          <td><span class="badge pause">PAUSED</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- W-1 vs W-2 COMPARISON -->
+<div class="section">
+  <div class="section-title">Latest Matured Week (Jun 8) vs Previous Week (Jun 1)</div>
+  <div class="wk-box">
+    <div class="wk-card" style="border-left-color: var(--inbox)">
+      <h4 style="color:var(--inbox)">InboxDollars</h4>
+      <div class="wk-metric"><label>Spend</label><span class="val">$62,566 <span class="delta up">↑+25%</span></span></div>
+      <div class="wk-metric"><label>Logins</label><span class="val">3,641 <span class="delta up">↑+12%</span></span></div>
+      <div class="wk-metric"><label>Dep CVR</label><span class="val">14.56% <span class="delta up">↑+3.28pp</span></span></div>
+      <div class="wk-metric"><label>Lvl &gt;20</label><span class="val">11.86% <span class="delta up">↑+2.86pp</span></span></div>
+      <div class="wk-metric"><label>D7 ROAS</label><span class="val roas-red">4.7% <span class="delta up">↑+0.8pp</span></span></div>
+      <div style="font-size:10px; color:#888; margin-top:8px;">↑ Quality recovered from Jun-1 low but spend still scaling aggressively. Still below platform CVR (16.74%)</div>
+    </div>
+    <div class="wk-card" style="border-left-color: var(--myapp)">
+      <h4 style="color:var(--myapp)">MyAppFree</h4>
+      <div class="wk-metric"><label>Spend</label><span class="val">$32,935 <span class="delta up">↑+3%</span></span></div>
+      <div class="wk-metric"><label>Logins</label><span class="val">1,786 <span class="delta dn">↓–4%</span></span></div>
+      <div class="wk-metric"><label>Dep CVR</label><span class="val">21.83% <span class="delta up">↑+0.73pp</span></span></div>
+      <div class="wk-metric"><label>Lvl &gt;20</label><span class="val">16.45% <span class="delta dn">↓–0.39pp</span></span></div>
+      <div class="wk-metric"><label>D7 ROAS</label><span class="val roas-neutral">4.3% <span class="delta dn">↓–0.3pp</span></span></div>
+      <div style="font-size:10px; color:#888; margin-top:8px;">Stable, strong dep CVR well above platform. GinRummy logins growing on zero spend — high-value free traffic.</div>
+    </div>
+    <div class="wk-card" style="border-left-color: var(--adaction)">
+      <h4 style="color:var(--adaction)">AdAction</h4>
+      <div class="wk-metric"><label>Spend</label><span class="val">$13,279 <span class="delta up">↑+5%</span></span></div>
+      <div class="wk-metric"><label>Logins</label><span class="val">634 <span class="delta dn">↓–6%</span></span></div>
+      <div class="wk-metric"><label>Dep CVR</label><span class="val">18.61% <span class="delta up">↑+1.77pp</span></span></div>
+      <div class="wk-metric"><label>Lvl &gt;20</label><span class="val">17.46% <span class="delta up">↑+0.88pp</span></span></div>
+      <div class="wk-metric"><label>D7 ROAS</label><span class="val roas-green">7.0% <span class="delta up">↑+3.2pp</span></span></div>
+      <div style="font-size:10px; color:#888; margin-top:8px;">Best ROAS week in 8 weeks. Dep CVR above platform. Solitaire driving quality recovery.</div>
+    </div>
+    <div class="wk-card" style="border-left-color: var(--freecash)">
+      <h4 style="color:var(--freecash)">FreeCash</h4>
+      <div class="wk-metric"><label>Spend</label><span class="val">$0 <span class="delta dn">—</span></span></div>
+      <div class="wk-metric"><label>Dep CVR (last active W)</label><span class="val">19.59%</span></div>
+      <div class="wk-metric"><label>Lvl &gt;20 (last active W)</label><span class="val">19.91%</span></div>
+      <div class="wk-metric"><label>ROAS (W5 May-11)</label><span class="val roas-green">28.5%</span></div>
+      <div style="font-size:10px; color:#888; margin-top:8px;">⚡ Was highest ROAS channel before pause. Strong case to reactivate GinRummy campaigns.</div>
+    </div>
+  </div>
+</div>
+
+<!-- SITEID RECOMMENDATIONS -->
+<div class="section">
+  <div class="section-title">SiteID Action Flags — All Channels</div>
+
+  <div style="font-weight:600; font-family:'Fraunces',serif; font-size:12px; margin-bottom:8px;">InboxDollars (vc-* codes)</div>
+  <div class="site-scroll">
+    <table class="site-table">
+      <thead>
+        <tr>
+          <th>SiteID</th><th>Action</th>
+          <th class="num">L4w Logins</th><th class="num">L4w Dep CVR</th>
+          <th class="num">L4w Lvl&gt;20</th><th class="num">W1 CVR</th>
+          <th class="num">W1 Lvl&gt;20</th><th>Trend</th><th>Campaign</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>vc-36755</strong></td>
+          <td><span class="badge dn">SCALE DOWN</span></td>
+          <td class="num">1,918</td><td class="num" style="color:var(--red)">7.2%</td>
+          <td class="num" style="color:var(--red)">6.0%</td>
+          <td class="num" style="color:var(--red)">8.61%</td>
+          <td class="num" style="color:var(--red)">6.90%</td>
+          <td>Flat/poor</td>
+          <td>InboxDollar Bingo+Solitaire</td>
+        </tr>
+        <tr>
+          <td><strong>vc-20229</strong></td>
+          <td><span class="badge dn">SCALE DOWN</span></td>
+          <td class="num">4,984</td><td class="num" style="color:var(--red)">10.6%</td>
+          <td class="num" style="color:var(--red)">9.0%</td>
+          <td class="num" style="color:var(--red)">12.55%</td>
+          <td class="num" style="color:var(--red)">10.83%</td>
+          <td>Rising vol, low qual</td>
+          <td>InboxDollar Bingo+Solitaire+GinRummy</td>
+        </tr>
+        <tr>
+          <td><strong>vc-3413</strong></td>
+          <td><span class="badge dn">BLOCK</span></td>
+          <td class="num">299</td><td class="num" style="color:var(--red)">4.1%</td>
+          <td class="num" style="color:var(--red)">7.5%</td>
+          <td class="num" style="color:var(--red)">5.79%</td>
+          <td class="num" style="color:var(--red)">3.09%</td>
+          <td>Consistently terrible</td>
+          <td>InboxDollar Bingo+Solitaire</td>
+        </tr>
+        <tr>
+          <td><strong>vc-18478</strong></td>
+          <td><span class="badge dn">BLOCK</span></td>
+          <td class="num">65</td><td class="num" style="color:var(--red)">0%</td>
+          <td class="num" style="color:var(--red)">0%</td>
+          <td class="num" style="color:var(--red)">0%</td>
+          <td class="num" style="color:var(--red)">0%</td>
+          <td>Near-zero CVR</td>
+          <td>InboxDollar (legacy pre-switch)</td>
+        </tr>
+        <tr>
+          <td><strong>vc-26555</strong></td>
+          <td><span class="badge dn">SCALE DOWN</span></td>
+          <td class="num">174</td><td class="num" style="color:var(--red)">5.7%</td>
+          <td class="num" style="color:var(--red)">7.0%</td>
+          <td class="num">—</td>
+          <td class="num">—</td>
+          <td>Erratic, poor</td>
+          <td>InboxDollar Bingo+Solitaire</td>
+        </tr>
+        <tr>
+          <td><strong>vc-32188</strong></td>
+          <td><span class="badge watch">WATCH</span></td>
+          <td class="num">1,802</td><td class="num" style="color:var(--neutral)">12.0%</td>
+          <td class="num" style="color:var(--neutral)">9.2%</td>
+          <td class="num" style="color:var(--neutral)">16.69%</td>
+          <td class="num" style="color:var(--red)">10.55%</td>
+          <td>W1 volume spike; CVR recovering</td>
+          <td>InboxDollar Bingo+Solitaire</td>
+        </tr>
+        <tr>
+          <td><strong>vc-22482</strong></td>
+          <td><span class="badge up">SCALE UP</span></td>
+          <td class="num">939</td><td class="num" style="color:var(--green)">17.0%</td>
+          <td class="num" style="color:var(--green)">18.4%</td>
+          <td class="num" style="color:var(--green)">19.49%</td>
+          <td class="num" style="color:var(--green)">22.86%</td>
+          <td>Quality stable/improving</td>
+          <td>InboxDollar Bingo+Solitaire</td>
+        </tr>
+        <tr>
+          <td><strong>vc-22484</strong></td>
+          <td><span class="badge up">SCALE UP</span></td>
+          <td class="num">440</td><td class="num" style="color:var(--green)">20.9%</td>
+          <td class="num" style="color:var(--green)">18.1%</td>
+          <td class="num" style="color:var(--green)">20.99%</td>
+          <td class="num" style="color:var(--green)">21.92%</td>
+          <td>Consistent quality</td>
+          <td>InboxDollar Bingo+Solitaire</td>
+        </tr>
+        <tr>
+          <td><strong>vc-18936</strong></td>
+          <td><span class="badge up">SCALE UP</span></td>
+          <td class="num">720</td><td class="num" style="color:var(--green)">24.3%</td>
+          <td class="num" style="color:var(--green)">23.2%</td>
+          <td class="num" style="color:var(--green)">24.84%</td>
+          <td class="num" style="color:var(--green)">23.57%</td>
+          <td>Best CVR siteid</td>
+          <td>InboxDollar Bingo+Solitaire</td>
+        </tr>
+        <tr>
+          <td><strong>vc-19490</strong></td>
+          <td><span class="badge up">SCALE UP</span></td>
+          <td class="num">211</td><td class="num" style="color:var(--green)">27.0%</td>
+          <td class="num" style="color:var(--green)">27.7%</td>
+          <td class="num" style="color:var(--green)">28.57%</td>
+          <td class="num" style="color:var(--green)">27.50%</td>
+          <td>Top quality, growing vol</td>
+          <td>InboxDollar Bingo+Solitaire</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="font-weight:600; font-family:'Fraunces',serif; font-size:12px; margin:16px 0 8px;">MyAppFree</div>
+  <div class="site-scroll">
+    <table class="site-table">
+      <thead>
+        <tr>
+          <th>SiteID</th><th>Action</th>
+          <th class="num">L4w Logins</th><th class="num">L4w Dep CVR</th>
+          <th class="num">L4w Lvl&gt;20</th><th class="num">W1 CVR</th>
+          <th class="num">W1 Lvl&gt;20</th><th>Trend</th><th>Campaign</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>3739</strong></td>
+          <td><span class="badge up">SCALE UP</span></td>
+          <td class="num">5,358</td><td class="num" style="color:var(--green)">25.2%</td>
+          <td class="num" style="color:var(--green)">19.4%</td>
+          <td class="num" style="color:var(--green)">23.81%</td>
+          <td class="num" style="color:var(--green)">17.18%</td>
+          <td>Dominant siteid, consistently strong</td>
+          <td>MyAppFree Bingo+Solitaire+GinRummy</td>
+        </tr>
+        <tr>
+          <td><strong>4558</strong></td>
+          <td><span class="badge dn">BLOCK</span></td>
+          <td class="num">275</td><td class="num" style="color:var(--red)">4.7%</td>
+          <td class="num" style="color:var(--red)">4.6%</td>
+          <td class="num" style="color:var(--red)">3.19%</td>
+          <td class="num" style="color:var(--red)">4.76%</td>
+          <td>Growing, very low quality</td>
+          <td>MyAppFree Solitaire+GinRummy</td>
+        </tr>
+        <tr>
+          <td><strong>4740</strong></td>
+          <td><span class="badge dn">SCALE DOWN</span></td>
+          <td class="num">103</td><td class="num" style="color:var(--red)">10.7%</td>
+          <td class="num" style="color:var(--red)">7.8%</td>
+          <td class="num" style="color:var(--red)">7.69%</td>
+          <td class="num" style="color:var(--red)">9.52%</td>
+          <td>Below platform quality</td>
+          <td>MyAppFree Bingo+Solitaire</td>
+        </tr>
+        <tr>
+          <td><strong>2469</strong></td>
+          <td><span class="badge watch">MAINTAIN</span></td>
+          <td class="num">179</td><td class="num" style="color:var(--neutral)">16.8%</td>
+          <td class="num" style="color:var(--neutral)">18.8%</td>
+          <td class="num" style="color:var(--neutral)">16.67%</td>
+          <td class="num" style="color:var(--green)">20.00%</td>
+          <td>Near platform, improving</td>
+          <td>MyAppFree Bingo+Solitaire</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="font-weight:600; font-family:'Fraunces',serif; font-size:12px; margin:16px 0 8px;">AdAction</div>
+  <div class="site-scroll">
+    <table class="site-table">
+      <thead>
+        <tr>
+          <th>SiteID</th><th>Action</th>
+          <th class="num">L4w Logins</th><th class="num">L4w Dep CVR</th>
+          <th class="num">L4w Lvl&gt;20</th><th class="num">W1 CVR</th>
+          <th class="num">W1 Lvl&gt;20</th><th>Trend</th><th>Campaign</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>329825370</strong></td>
+          <td><span class="badge up">SCALE UP</span></td>
+          <td class="num">764</td><td class="num" style="color:var(--green)">21.5%</td>
+          <td class="num" style="color:var(--green)">20.1%</td>
+          <td class="num" style="color:var(--green)">23.53%</td>
+          <td class="num" style="color:var(--green)">22.31%</td>
+          <td>Quality improving W/W</td>
+          <td>AdAction Bingo+Solitaire</td>
+        </tr>
+        <tr>
+          <td><strong>329830666</strong></td>
+          <td><span class="badge watch">MAINTAIN</span></td>
+          <td class="num">1,054</td><td class="num" style="color:var(--neutral)">18.3%</td>
+          <td class="num" style="color:var(--neutral)">17.7%</td>
+          <td class="num" style="color:var(--green)">19.78%</td>
+          <td class="num" style="color:var(--green)">19.37%</td>
+          <td>Around platform, recovering W1</td>
+          <td>AdAction Bingo+Solitaire</td>
+        </tr>
+        <tr>
+          <td><strong>329825346</strong></td>
+          <td><span class="badge watch">MAINTAIN</span></td>
+          <td class="num">300</td><td class="num" style="color:var(--neutral)">16.4%</td>
+          <td class="num" style="color:var(--neutral)">18.1%</td>
+          <td class="num" style="color:var(--neutral)">20.63%</td>
+          <td class="num" style="color:var(--neutral)">16.67%</td>
+          <td>Near platform benchmark</td>
+          <td>AdAction Bingo+Solitaire</td>
+        </tr>
+        <tr>
+          <td><strong>329831306</strong></td>
+          <td><span class="badge watch">INVESTIGATE</span></td>
+          <td class="num">35</td><td class="num" style="color:var(--green)">28.6%</td>
+          <td class="num" style="color:var(--green)">26.7%</td>
+          <td class="num" style="color:var(--red)">0%</td>
+          <td class="num" style="color:var(--red)">0%</td>
+          <td>Highest quality → vol dying</td>
+          <td>AdAction Bingo+Solitaire</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- RECOMMENDATIONS -->
+<div class="section">
+  <div class="section-title">Recommendations Summary</div>
+  <div class="rec-grid">
+    <div class="rec-card" style="border-top: 3px solid var(--green)">
+      <h4>⬆ Scale Up</h4>
+      <ul class="rec-list">
+        <li><span>MyAppFree — siteid 3739</span><span class="badge up">Bingo + Solitaire + GinRummy</span></li>
+        <li><span>InboxDollars — vc-18936</span><span class="badge up">24.8% CVR</span></li>
+        <li><span>InboxDollars — vc-19490</span><span class="badge up">28.6% CVR</span></li>
+        <li><span>InboxDollars — vc-22482</span><span class="badge up">19.5% CVR</span></li>
+        <li><span>InboxDollars — vc-22484</span><span class="badge up">21.0% CVR</span></li>
+        <li><span>AdAction — siteid 329825370</span><span class="badge up">23.5% CVR</span></li>
+        <li><span>FreeCash GinRummy</span><span class="badge watch">Reactivate — 28%+ ROAS last active</span></li>
+      </ul>
+    </div>
+    <div class="rec-card" style="border-top: 3px solid var(--red)">
+      <h4>⬇ Scale Down / Block</h4>
+      <ul class="rec-list">
+        <li><span>InboxDollars — vc-20229</span><span class="badge dn">Scale Down — 10.6% CVR, 4,984 logins</span></li>
+        <li><span>InboxDollars — vc-36755</span><span class="badge dn">Scale Down — 7.2% CVR, 1,918 logins</span></li>
+        <li><span>InboxDollars — vc-3413</span><span class="badge dn">Block — 4.1% CVR</span></li>
+        <li><span>InboxDollars — vc-18478</span><span class="badge dn">Block — ~0% CVR</span></li>
+        <li><span>InboxDollars — vc-26555</span><span class="badge dn">Scale Down — erratic</span></li>
+        <li><span>MyAppFree — siteid 4558</span><span class="badge dn">Block — 3.2% CVR, growing</span></li>
+        <li><span>MyAppFree — siteid 4740</span><span class="badge dn">Scale Down — 7.7% CVR</span></li>
+      </ul>
+    </div>
+    <div class="rec-card" style="border-top: 3px solid #f39c12">
+      <h4>⚠ Channel Actions Required</h4>
+      <ul class="rec-list">
+        <li><span>InboxDollars: Pause vc-20229 &amp; vc-36755 campaigns</span><span class="badge dn">High Priority</span></li>
+        <li><span>InboxDollars: GinRummy spend up 33% but CVR only 14.56% vs 16.74% platform</span><span class="badge watch">Investigate</span></li>
+        <li><span>MyAppFree: Block 4558 before volume grows further</span><span class="badge dn">Urgent</span></li>
+        <li><span>AdAction: Investigate why 329831306 lost volume — was highest quality</span><span class="badge watch">Investigate</span></li>
+        <li><span>FreeCash: Explore reactivation on GinRummy with VC team</span><span class="badge up">Opportunity</span></li>
+      </ul>
+    </div>
+    <div class="rec-card" style="border-top: 3px solid #5B7FDB">
+      <h4>📊 Key Findings</h4>
+      <ul class="rec-list">
+        <li><span>InboxDollars spend ↑33% W8→W1 but quality declining. Two bad siteids (vc-20229 + vc-36755) account for ~6,900 logins at &lt;10% CVR.</span></li>
+        <li><span>MyAppFree GinRummy: 2,274 logins in last 4w with ZERO spend — organic/residual high-value traffic going to waste.</span></li>
+        <li><span>AdAction Jun-8 best ROAS week (7.0%) in 8 weeks. Solitaire siteid 329825370 improving consistently.</span></li>
+        <li><span>FreeCash had 28.5% ROAS last active week (May-11). Pause reason unclear — requires follow-up with account team.</span></li>
+        <li><span>Platform quality declining (CVR 17.78%→16.05%, Lvl>20 22.18%→19.53%) — incent mix shift is a factor.</span></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  Generated: Jun 22, 2026 · Data: mpl-prod-data.dw_gold.fact_login_channels_revenue + dw_silver.marketing_spends_fat + dw_silver.user_level_up_fat + dw_silver.marketing_installs_fat · Country: US · D7 window inclusive · Dep CVR: full login cohort (no Player filter) · Lvl&gt;20: Player logins only · ROAS: D7 CM1 / Spend × 100
+</div>
+
+</div><!-- /page -->
+
+<script>
+const WEEKS = ['Apr 20','Apr 27','May 4','May 11','May 18','May 25','Jun 1','Jun 8'];
+const C = { inbox:'#D64545', myapp:'#E8A33D', adaction:'#5B7FDB', freecash:'#4AAB7E', platform:'#888' };
+
+// ---- DATA ----
+const CHANNEL_DATA = {
+  inboxdollars_int: {
+    label: 'InboxDollars',
+    color: C.inbox,
+    spend:   [40752,43655,35824,37327,51071,46401,49840,62566],
+    cvr:     [12.63,15.05,15.50,16.13,11.74,12.49,11.28,14.56],
+    lvl:     [11.84,13.16,14.49,14.96,12.08,11.65, 9.00,11.86],
+    roas:    [3.5,3.7,5.9,6.4,2.6,6.5,3.9,4.7],
+    bycat: {
+      Bingo:    { spend:[19905,20577,15966,17000,19772,20743,24113,32103], cvr:[13.04,17.05,16.73,16.74,14.37,13.02,11.72,14.39], lvl:[11.68,14.50,15.78,16.55,14.17,11.64,8.74,11.56] },
+      Solitaire:{ spend:[20847,23078,19858,20327,19499,18958,18652,22713], cvr:[12.23,13.53,14.58,15.64,11.31,11.94,10.13,14.10], lvl:[12.00,12.13,13.51,13.64,10.25,10.99,8.55,12.03] },
+      GinRummy: { spend:[0,0,0,0,11800,6700,7075,7750],               cvr:[null,null,null,null,5.87,12.20,13.94,17.87], lvl:[null,null,null,null,11.50,15.76,14.05,13.33] },
+    }
+  },
+  myappfre_int: {
+    label: 'MyAppFree',
+    color: C.myapp,
+    spend:   [43416,46963,20580,16006,16436,24602,33025,32935],
+    cvr:     [20.58,20.90,24.75,22.89,23.57,24.84,21.10,21.83],
+    lvl:     [14.00,16.52,18.97,20.76,18.37,20.64,16.84,16.45],
+    roas:    [3.6,5.0,5.8,7.8,7.1,6.7,4.5,4.3],
+    bycat: {
+      Bingo:    { spend:[9123,18236,6435,5104,5741,5894,5350,7555], cvr:[25.06,20.08,26.07,22.26,20.41,18.73,19.71,25.43], lvl:[21.88,20.48,27.73,23.00,17.11,17.70,23.65,23.48] },
+      Solitaire:{ spend:[34293,28727,14145,10902,10695,18708,27675,25380], cvr:[19.60,21.42,24.21,19.44,18.95,24.52,20.93,19.04], lvl:[12.09,13.98,15.43,16.96,13.90,16.98,14.37,12.85] },
+      GinRummy: { spend:[0,0,0,0,0,0,0,0], cvr:[null,null,null,39.09,30.73,28.18,21.96,24.08], lvl:[null,null,null,34.21,24.91,26.91,18.16,18.44] },
+    }
+  },
+  adaction5_int: {
+    label: 'AdAction',
+    color: C.adaction,
+    spend:   [15296,21266,20556,21391,13515,16537,12608,13279],
+    cvr:     [12.69,13.78,15.52,15.14,17.43,16.79,16.84,18.61],
+    lvl:     [14.31,15.22,16.39,19.31,17.88,17.24,16.58,17.46],
+    roas:    [4.0,1.8,2.6,5.5,-4.7,5.9,3.8,7.0],
+    bycat: {
+      Bingo:    { spend:[4689,9773,8124,9649,4323,4052,2741,2940], cvr:[13.36,16.77,22.86,20.89,22.22,19.64,18.25,16.77], lvl:[15.92,19.12,24.31,25.74,25.62,20.27,20.00,16.30] },
+      Solitaire:{ spend:[10607,11493,12432,11742,9192,12485,9867,10339], cvr:[12.24,11.75,11.42,11.87,16.02,16.07,16.48,19.21], lvl:[13.32,12.68,11.92,15.63,15.69,16.50,15.77,17.82] },
+      GinRummy: { spend:[0,0,0,0,0,0,0,0], cvr:[null,null,null,null,null,null,null,null], lvl:[null,null,null,null,null,null,null,null] },
+    }
+  },
+  freecash_int: {
+    label: 'FreeCash',
+    color: C.freecash,
+    spend:   [5947,5752,7405,2845,54,33,0,0],
+    cvr:     [24.40,28.68,20.67,19.59,null,null,null,null],
+    lvl:     [19.15,21.51,17.74,19.91,null,null,null,null],
+    roas:    [26.9,14.3,11.5,28.5,null,null,null,null],
+    bycat: {
+      GinRummy: { spend:[4363,4850,5645,2064,32,11,0,0], cvr:[26.26,30.43,21.24,20.81,33.33,0,25.0,100.0], lvl:[19.31,22.60,17.23,21.43,50.0,0,0,0] },
+      Solitaire:{ spend:[1584,902,1760,781,22,22,0,0], cvr:[19.15,18.99,18.75,16.00,50.0,60.0,null,null], lvl:[18.75,15.94,19.23,15.87,75.0,25.0,null,null] },
+      Bingo:    { spend:[0,0,0,0,0,0,0,0], cvr:[null,null,null,null,null,null,null,null], lvl:[null,null,null,null,null,null,null,null] },
+    }
+  }
+};
+
+const PLATFORM = {
+  cvr:  [16.84,18.98,18.23,17.05,15.71,16.23,15.53,16.74],
+  lvl:  [20.18,22.92,22.62,23.01,20.78,19.99,18.21,19.15],
+  roas: [12.9,13.1,9.5,8.9,11.2,11.0,6.7,8.3]
+};
+
+// ---- SITEID DATA ----
+const SITE_DATA = {
+  inboxdollars_int: {
+    siteids: ['vc-36755','vc-20229','vc-32188','vc-22482','vc-22484','vc-18936','vc-19490','vc-2961','vc-3413','vc-26555','vc-18478'],
+    logins: {
+      'vc-36755': [1029,953,676,418,518,591,371,418],
+      'vc-20229': [299,296,431,675,776,828,1715,1665],
+      'vc-32188': [55,158,172,60,199,383,339,881],
+      'vc-22482': [93,117,176,391,395,231,195,118],
+      'vc-22484': [116,100,113,159,143,108,108,81],
+      'vc-18936': [161,137,131,160,149,230,180,161],
+      'vc-19490': [41,46,39,52,37,53,72,49],
+      'vc-2961':  [50,34,32,30,49,110,105,56],
+      'vc-3413':  [0,32,12,59,61,51,66,121],
+      'vc-26555': [50,45,25,35,39,48,3,0],
+      'vc-18478': [221,12,9,11,8,8,9,3],
+    },
+    cvr: {
+      'vc-36755': [5.64,7.14,8.73,8.61,6.37,7.95,5.66,8.61],
+      'vc-20229': [17.06,24.66,18.56,16.44,10.44,10.27,9.33,12.55],
+      'vc-32188': [10.91,5.70,6.98,10.00,8.54,12.01,10.62,16.69],
+      'vc-22482': [33.33,35.90,19.32,14.58,18.73,15.15,14.36,19.49],
+      'vc-22484': [35.34,38.00,30.97,26.42,19.58,21.30,21.30,20.99],
+      'vc-18936': [23.60,21.90,28.24,31.87,26.85,22.17,23.33,24.84],
+      'vc-19490': [21.95,28.26,20.51,17.31,24.32,33.96,22.22,28.57],
+      'vc-2961':  [28.00,17.65,28.13,20.00,14.29,12.73,12.38,16.07],
+      'vc-3413':  [null,12.50,8.33,6.78,4.92,1.96,4.55,5.79],
+      'vc-26555': [4.00,6.67,0,2.86,10.26,2.08,33.33,null],
+      'vc-18478': [4.07,0,0,0,0,0,0,0],
+    },
+    lvl: {
+      'vc-36755': [5.41,5.81,7.12,6.86,5.30,5.82,4.71,6.90],
+      'vc-20229': [14.87,18.73,16.02,13.29,9.32,9.30,6.38,10.83],
+      'vc-32188': [5.56,5.33,5.59,8.77,10.91,8.23,7.17,10.55],
+      'vc-22482': [35.71,32.38,23.13,17.27,19.19,15.94,13.79,22.86],
+      'vc-22484': [32.38,36.56,33.33,26.17,18.18,16.67,16.16,21.92],
+      'vc-18936': [21.92,18.64,24.17,26.39,25.38,22.92,20.92,23.57],
+      'vc-19490': [19.44,32.43,14.29,24.39,12.50,40.00,24.56,27.50],
+      'vc-2961':  [38.10,20.69,31.03,17.39,19.51,22.78,16.87,14.29],
+      'vc-3413':  [null,10.71,30.00,7.84,10.64,8.89,7.14,3.09],
+      'vc-26555': [11.63,2.78,0,10.34,12.12,2.78,33.33,null],
+      'vc-18478': [3.54,9.09,0,9.09,0,0,0,0],
+    }
+  },
+  myappfre_int: {
+    siteids: ['3739','4558','2469','4740'],
+    logins: {
+      '3739': [1584,1362,762,692,888,1326,1628,1516],
+      '4558': [0,0,0,0,34,77,70,94],
+      '2469': [40,51,36,41,39,49,49,42],
+      '4740': [25,21,23,33,38,27,12,26],
+    },
+    cvr: {
+      '3739': [21.59,22.98,26.77,25.29,26.58,27.83,22.67,23.81],
+      '4558': [null,null,null,null,0,6.49,7.14,3.19],
+      '2469': [12.50,9.80,11.11,19.51,17.95,12.24,20.41,16.67],
+      '4740': [16.00,23.81,8.70,15.15,15.79,7.41,8.33,7.69],
+    },
+    lvl: {
+      '3739': [13.88,15.62,19.38,22.50,20.03,22.82,17.31,17.18],
+      '4558': [null,null,null,null,3.13,4.35,5.88,4.76],
+      '2469': [10.71,8.70,17.24,15.63,17.24,14.71,22.22,20.00],
+      '4740': [12.50,15.00,10.53,13.79,6.45,5.00,9.09,9.52],
+    }
+  },
+  adaction5_int: {
+    siteids: ['329830666','329825370','329825346','329831306'],
+    logins: {
+      '329830666': [339,439,463,319,144,335,307,268],
+      '329825370': [15,12,28,100,233,236,159,136],
+      '329825346': [3,1,8,34,80,89,68,63],
+      '329831306': [125,120,40,26,16,12,7,1],
+    },
+    cvr: {
+      '329830666': [10.62,11.16,14.90,14.73,21.53,16.12,15.64,19.78],
+      '329825370': [6.67,8.33,21.43,14.00,18.45,21.61,22.64,23.53],
+      '329825346': [0,0,25.00,5.88,18.75,11.24,14.71,20.63],
+      '329831306': [13.60,23.33,22.50,23.08,31.25,41.67,14.29,0],
+    },
+    lvl: {
+      '329830666': [10.58,12.16,14.92,20.61,22.05,14.37,14.79,19.37],
+      '329825370': [0,18.18,27.27,18.07,16.26,22.12,19.85,22.31],
+      '329825346': [0,0,50.00,6.67,14.71,22.08,20.00,16.67],
+      '329831306': [19.23,24.00,31.25,33.33,25.00,36.36,16.67,0],
+    }
+  }
+};
+
+// SITEID COLORS
+const SITE_COLORS = [
+  '#D64545','#E8A33D','#5B7FDB','#4AAB7E','#9B59B6',
+  '#16a085','#8e44ad','#2980b9','#d35400','#27ae60','#c0392b'
+];
+
+// ---- CHART DEFAULTS ----
+Chart.defaults.font.family = "'JetBrains Mono', monospace";
+Chart.defaults.font.size = 11;
+Chart.defaults.plugins.legend.display = false;
+
+function hexAlpha(hex, a) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// ---- PANEL I: STACKED SPEND ----
+new Chart(document.getElementById('spendChart'), {
+  type: 'bar',
+  data: {
+    labels: WEEKS,
+    datasets: [
+      { label:'InboxDollars', data: CHANNEL_DATA.inboxdollars_int.spend, backgroundColor: hexAlpha(C.inbox,0.85), stack:'s' },
+      { label:'MyAppFree',    data: CHANNEL_DATA.myappfre_int.spend,    backgroundColor: hexAlpha(C.myapp,0.85), stack:'s' },
+      { label:'AdAction',     data: CHANNEL_DATA.adaction5_int.spend,   backgroundColor: hexAlpha(C.adaction,0.85), stack:'s' },
+      { label:'FreeCash',     data: CHANNEL_DATA.freecash_int.spend,    backgroundColor: hexAlpha(C.freecash,0.85), stack:'s' },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: true, position:'top', labels:{ boxWidth:12, font:{size:11} } },
+      tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: $${ctx.raw.toLocaleString()}` } }
+    },
+    scales: {
+      x: { stacked:true, grid:{display:false} },
+      y: { stacked:true, ticks:{ callback: v=>'$'+Math.round(v/1000)+'K' }, grid:{ color:'#eee' } }
+    }
+  }
+});
+
+// ---- PANEL II: CVR CHART ----
+function makeQualChart(canvasId, metricKey, yLabel) {
+  const datasets = Object.values(CHANNEL_DATA).map(ch => ({
+    label: ch.label,
+    data: ch[metricKey].map(v => v === null ? null : v),
+    borderColor: ch.color,
+    backgroundColor: hexAlpha(ch.color, 0.08),
+    borderWidth: 2,
+    pointRadius: 3,
+    tension: 0.3,
+    spanGaps: false
+  }));
+  datasets.push({
+    label: 'Platform',
+    data: PLATFORM[metricKey],
+    borderColor: C.platform,
+    borderWidth: 2,
+    borderDash: [6,3],
+    pointRadius: 2,
+    tension: 0.3
+  });
+  new Chart(document.getElementById(canvasId), {
+    type:'line',
+    data: { labels: WEEKS, datasets },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: {
+        legend:{ display:true, position:'top', labels:{ boxWidth:10, font:{size:10} } },
+        tooltip:{ callbacks:{ label: ctx => ` ${ctx.dataset.label}: ${ctx.raw?.toFixed(1)}%` } }
+      },
+      scales: {
+        x:{ grid:{display:false} },
+        y:{ ticks:{ callback: v=>v+'%' }, grid:{ color:'#eee' } }
+      }
+    }
+  });
+}
+makeQualChart('cvrChart','cvr','Dep CVR %');
+makeQualChart('lvlChart','lvl','Lvl>20 %');
+
+// ---- PANEL III: DEEP DIVE ----
+let deepChart = null;
+function buildDeepChart() {
+  const ch = document.getElementById('channelChips').querySelector('.active').dataset.ch;
+  const cat = document.getElementById('catSelect').value;
+  const chData = CHANNEL_DATA[ch];
+  const color = chData.color;
+
+  let spend, cvr, lvl, roas;
+  if (cat === 'Overall') {
+    spend = chData.spend; cvr = chData.cvr; lvl = chData.lvl; roas = chData.roas;
+  } else {
+    const cd = chData.bycat[cat] || {};
+    spend = cd.spend || Array(8).fill(0);
+    cvr   = cd.cvr   || Array(8).fill(null);
+    lvl   = cd.lvl   || Array(8).fill(null);
+    roas  = Array(8).fill(null); // category-level ROAS not pre-computed
+  }
+
+  if (deepChart) deepChart.destroy();
+  deepChart = new Chart(document.getElementById('deepChart'), {
+    type:'bar',
+    data: {
+      labels: WEEKS,
+      datasets: [
+        {
+          type:'bar', label:'Spend ($)',
+          data: spend,
+          backgroundColor: hexAlpha(color, 0.18),
+          borderColor: hexAlpha(color, 0.5),
+          borderWidth: 1,
+          yAxisID:'ySpend', order:3
+        },
+        {
+          type:'line', label:'Dep CVR %',
+          data: cvr,
+          borderColor: color,
+          borderWidth: 2.5,
+          pointRadius: 4,
+          tension: 0.3,
+          yAxisID:'yQual', order:1, spanGaps:false
+        },
+        {
+          type:'line', label:'Lvl>20 %',
+          data: lvl,
+          borderColor: hexAlpha(color,0.6),
+          borderWidth: 2,
+          borderDash:[5,3],
+          pointRadius: 3,
+          tension: 0.3,
+          yAxisID:'yQual', order:2, spanGaps:false
+        },
+        {
+          type:'line', label:'D7 ROAS %',
+          data: cat==='Overall'?roas:Array(8).fill(null),
+          borderColor:'#999',
+          borderWidth:1.5,
+          borderDash:[3,3],
+          pointRadius:2,
+          tension:0.3,
+          yAxisID:'yRoas', order:4, spanGaps:false
+        },
+        {
+          type:'line', label:'Platform CVR',
+          data: PLATFORM.cvr,
+          borderColor:'#aaa',
+          borderWidth:1,
+          borderDash:[8,4],
+          pointRadius:0,
+          yAxisID:'yQual', order:5
+        }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:true, position:'top', labels:{boxWidth:10,font:{size:10}}},
+        tooltip:{callbacks:{label: ctx => {
+          if(ctx.dataset.yAxisID==='ySpend') return ` Spend: $${ctx.raw?.toLocaleString()}`;
+          return ` ${ctx.dataset.label}: ${ctx.raw?.toFixed(1)}%`;
+        }}}
+      },
+      scales:{
+        x:{ grid:{display:false} },
+        ySpend:{ position:'left', ticks:{callback:v=>'$'+Math.round(v/1000)+'K'}, grid:{color:'#f0f0f0'} },
+        yQual: { position:'right', ticks:{callback:v=>v+'%'}, grid:{display:false}, min:0, max:45 },
+        yRoas: { position:'right', display:false, min:0, max:40 }
+      }
+    }
+  });
+}
+
+document.getElementById('channelChips').addEventListener('click', e=>{
+  const btn = e.target.closest('.chip');
+  if(!btn) return;
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  btn.classList.add('active');
+  buildDeepChart();
+});
+document.getElementById('catSelect').addEventListener('change', buildDeepChart);
+buildDeepChart();
+
+// ---- PANEL IV: SITEID ----
+let siteChart = null;
+function buildSiteChart() {
+  const ch = document.getElementById('siteChSelect').value;
+  const metric = document.getElementById('siteMetric').value;
+  const sd = SITE_DATA[ch];
+  if(!sd) return;
+  const siteids = sd.siteids;
+  const metricMap = { cvr:'cvr', lvl:'lvl', logins:'logins' };
+  const metricData = sd[metricMap[metric]];
+
+  const datasets = siteids.map((sid,i)=>({
+    label: sid,
+    data: metricData[sid] || Array(8).fill(null),
+    borderColor: SITE_COLORS[i % SITE_COLORS.length],
+    borderWidth: 2,
+    pointRadius: 3,
+    tension: 0.3,
+    spanGaps: false
+  }));
+
+  if(metric !== 'logins') {
+    datasets.push({
+      label:'Platform',
+      data: metric==='cvr'?PLATFORM.cvr:PLATFORM.lvl,
+      borderColor:'#999', borderWidth:1.5, borderDash:[6,3], pointRadius:0, tension:0.3
+    });
+  }
+
+  if(siteChart) siteChart.destroy();
+  siteChart = new Chart(document.getElementById('siteChart'), {
+    type:'line',
+    data:{ labels:WEEKS, datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:true, position:'top', labels:{boxWidth:10,font:{size:10}}},
+        tooltip:{callbacks:{label:ctx=>{
+          if(metric==='logins') return ` ${ctx.dataset.label}: ${ctx.raw?.toLocaleString()}`;
+          return ` ${ctx.dataset.label}: ${ctx.raw?.toFixed(1)}%`;
+        }}}
+      },
+      scales:{
+        x:{grid:{display:false}},
+        y:{
+          ticks:{callback:v=>metric==='logins'?v.toLocaleString():v+'%'},
+          grid:{color:'#eee'}
+        }
+      }
+    }
+  });
+}
+document.getElementById('siteChSelect').addEventListener('change', buildSiteChart);
+document.getElementById('siteMetric').addEventListener('change', buildSiteChart);
+buildSiteChart();
+</script>
+</body>
+</html>
