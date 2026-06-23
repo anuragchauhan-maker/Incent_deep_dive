@@ -1,641 +1,1119 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MPL Incent Channel Deep Dive — Jun 23, 2026</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  :root{
-    --bg:#0f0f0f;--card:#1a1a1a;--border:#2a2a2a;--text:#e8e8e8;--muted:#888;
-    --inboxdollars:#D64545;--myappfree:#E8A33D;--adaction:#5B7FDB;
-    --freecash:#4AAB7E;--kashkick:#9B59B6;--platform:#888;
-    --green:#4AAB7E;--amber:#E8A33D;--red:#D64545;
-  }
-  body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;font-size:14px;line-height:1.6}
-  h1,h2,h3{font-family:'Fraunces',serif}
-  .mono{font-family:'JetBrains Mono',monospace}
-  .header{padding:32px 40px 24px;border-bottom:1px solid var(--border)}
-  .header h1{font-size:28px;font-weight:700;margin-bottom:4px}
-  .header .sub{color:var(--muted);font-size:13px;margin-bottom:12px}
-  .banner{background:#2a1a00;border:1px solid #5a3800;border-radius:8px;padding:12px 16px;font-size:13px;color:#E8A33D;margin-top:12px}
-  .banner strong{color:#ffb347}
-  .main{padding:32px 40px;max-width:1400px;margin:0 auto}
-  .panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:32px}
-  .panel-title{font-family:'Fraunces',serif;font-size:16px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid var(--border)}
-  .chart-row{display:grid;gap:24px}
-  .chart-row-2{grid-template-columns:1fr 1fr}
-  .chart-wrap{position:relative;height:280px}
-  canvas{display:block}
-  /* chips */
-  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
-  .chip{padding:6px 16px;border-radius:20px;border:2px solid;cursor:pointer;font-size:13px;font-weight:500;background:transparent;transition:.2s;color:#e8e8e8}
-  .chip.active{color:#0f0f0f!important;font-weight:700}
-  .chip-ibd{border-color:var(--inboxdollars)}
-  .chip-ibd.active{background:var(--inboxdollars)}
-  .chip-maf{border-color:var(--myappfree)}
-  .chip-maf.active{background:var(--myappfree);color:#0f0f0f}
-  .chip-frc{border-color:var(--freecash)}
-  .chip-frc.active{background:var(--freecash)}
-  .chip-ada{border-color:var(--adaction)}
-  .chip-ada.active{background:var(--adaction)}
-  .chip-ksk{border-color:var(--kashkick)}
-  .chip-ksk.active{background:var(--kashkick)}
-  /* controls */
-  select{background:#222;border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer}
-  .controls{display:flex;align-items:center;gap:16px;margin-bottom:20px;flex-wrap:wrap}
-  /* tables */
-  .tbl-wrap{overflow-x:auto}
-  table{width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:12px}
-  th{background:#222;padding:8px 10px;text-align:right;color:var(--muted);font-weight:500;border-bottom:2px solid var(--border);white-space:nowrap}
-  th:first-child,th:nth-child(2){text-align:left}
-  td{padding:7px 10px;border-bottom:1px solid var(--border);text-align:right}
-  td:first-child,td:nth-child(2){text-align:left}
-  tr:hover{background:rgba(255,255,255,.03)}
-  .tag-up{background:#0d3320;color:#4AAB7E;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
-  .tag-down{background:#3a0d0d;color:#D64545;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
-  .tag-stable{background:#222;color:#888;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
-  .tag-watch{background:#2a1a00;color:#E8A33D;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
-  .tag-hist{background:#1a1a2a;color:#5B7FDB;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
-  .roas-green{color:#4AAB7E;font-weight:600}
-  .roas-amber{color:#E8A33D;font-weight:600}
-  .roas-red{color:#D64545;font-weight:600}
-  .delta-pos{color:#4AAB7E}
-  .delta-neg{color:#D64545}
-  /* reco cards */
-  .reco-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-  .reco-card{border-radius:8px;padding:16px;border:1px solid}
-  .reco-up{background:#0a2015;border-color:#1e5c35}
-  .reco-down{background:#200a0a;border-color:#5c1e1e}
-  .reco-card h4{font-size:13px;font-weight:700;margin-bottom:8px}
-  .reco-up h4{color:#4AAB7E}
-  .reco-down h4{color:#D64545}
-  .reco-card ul{padding-left:16px;font-size:12px;color:#ccc}
-  .reco-card li{margin-bottom:6px}
-  .campaign-tag{background:#111;border:1px solid #333;border-radius:3px;padding:1px 5px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#aaa}
-  .note-box{background:#1a1a0a;border:1px solid #4a3800;border-radius:6px;padding:12px;font-size:12px;color:#c8a84a;margin:12px 0}
-  .hidden{display:none}
-  .siteid-msg{color:var(--muted);font-style:italic;padding:20px 0;text-align:center}
-  footer{text-align:center;padding:24px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);margin-top:16px}
-  .section-anchor{scroll-margin-top:24px}
-  @media(max-width:768px){
-    .chart-row-2,.reco-grid{grid-template-columns:1fr}
-    .main,.header{padding:16px}
-  }
-  .download-btn{background:#222;border:1px solid var(--border);color:var(--text);padding:7px 16px;border-radius:6px;cursor:pointer;font-size:13px;margin-left:auto}
-  .download-btn:hover{background:#2a2a2a}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MPL Incent Channel Deep Dive — Analytics Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: #0f0f0f;
+      color: #e0e0e0;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    h1, h2, h3, h4 { font-family: 'Fraunces', serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    a { color: #5B7FDB; }
+
+    /* Layout */
+    .container { max-width: 1280px; margin: 0 auto; padding: 24px 20px; }
+
+    /* Header */
+    header { padding: 32px 20px 24px; max-width: 1280px; margin: 0 auto; }
+    header h1 { font-size: 2rem; font-weight: 900; color: #fff; margin-bottom: 4px; }
+    .subtitle { color: #888; font-size: 0.9rem; margin-bottom: 16px; }
+    .banner {
+      background: #1a0e00;
+      border: 1px solid #E8A33D;
+      color: #E8A33D;
+      padding: 12px 20px;
+      border-radius: 6px;
+      font-weight: bold;
+      font-size: 0.85rem;
+      margin-bottom: 10px;
+    }
+    .run-info { font-size: 0.75rem; color: #666; }
+
+    /* Cards */
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      transition: border-color 0.2s ease;
+    }
+    .card:hover { border-color: #3a3a3a; }
+    .card-title {
+      font-family: 'Fraunces', serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .card-subtitle { font-size: 0.8rem; color: #666; margin-bottom: 20px; }
+
+    /* Chart containers */
+    .chart-wrap { position: relative; height: 320px; width: 100%; }
+    .chart-wrap-sm { position: relative; height: 260px; width: 100%; }
+
+    /* Two-column grid */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+
+    /* Chips */
+    .chip-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .chip {
+      display: inline-block;
+      border-radius: 20px;
+      cursor: pointer;
+      padding: 6px 16px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      border: 2px solid transparent;
+      background: #2a2a2a;
+      color: #aaa;
+    }
+    .chip:hover { background: #333; color: #e0e0e0; }
+    .chip.active { color: #fff; }
+    .chip-inboxdollars.active  { background: #D64545; border-color: #D64545; }
+    .chip-myappfree.active     { background: #E8A33D; border-color: #E8A33D; color: #111; }
+    .chip-adaction.active      { background: #5B7FDB; border-color: #5B7FDB; }
+    .chip-freecash.active      { background: #4AAB7E; border-color: #4AAB7E; }
+    .chip-kashkick.active      { background: #9B59B6; border-color: #9B59B6; }
+
+    /* Select dropdown */
+    .styled-select {
+      background: #2a2a2a;
+      border: 1px solid #3a3a3a;
+      color: #e0e0e0;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      outline: none;
+    }
+    .styled-select:focus { border-color: #5B7FDB; }
+
+    /* Tables */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    th, td { padding: 10px 14px; text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; }
+    thead { background: #222; }
+    thead th { color: #aaa; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    tr:nth-child(even) { background: rgba(255,255,255,0.03); }
+    tbody tr:hover { background: rgba(255,255,255,0.06); }
+
+    /* Status badges */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    .badge-SCALE-UP    { background: rgba(74,171,126,0.25); color: #4AAB7E; }
+    .badge-SCALE-DOWN  { background: rgba(214,69,69,0.25); color: #D64545; }
+    .badge-STABLE      { background: #333; color: #aaa; }
+    .badge-MONITOR     { background: rgba(232,163,61,0.25); color: #E8A33D; }
+    .badge-WATCH       { background: rgba(155,89,182,0.25); color: #9B59B6; }
+    .badge-HISTORICAL  { background: #2a2a2a; color: #666; }
+
+    /* ROAS rating chip */
+    .roas-red    { background: rgba(214,69,69,0.2); color: #D64545; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; }
+    .roas-amber  { background: rgba(232,163,61,0.2); color: #E8A33D; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; }
+    .roas-green  { background: rgba(74,171,126,0.2); color: #4AAB7E; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; }
+
+    /* Delta colors */
+    .delta-pos { color: #4AAB7E; font-weight: 600; }
+    .delta-neg { color: #D64545; font-weight: 600; }
+    .delta-null { color: #555; }
+
+    /* Panel III mini ROAS table */
+    .roas-mini-table { margin-top: 16px; overflow-x: auto; }
+    .roas-mini-table table { font-size: 0.78rem; }
+    .roas-mini-table td { padding: 6px 10px; }
+
+    /* Notice box */
+    .notice-box {
+      background: rgba(91,127,219,0.1);
+      border: 1px solid #5B7FDB;
+      color: #8aabf0;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      margin-bottom: 12px;
+    }
+    .amber-box {
+      background: rgba(232,163,61,0.08);
+      border: 1px solid #E8A33D;
+      color: #E8A33D;
+      padding: 12px 16px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      margin-top: 14px;
+    }
+    .amber-box strong { display: block; margin-bottom: 4px; }
+
+    /* Controls row */
+    .controls-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+    .controls-label { font-size: 0.8rem; color: #888; }
+
+    /* Panel VI - Recommendations */
+    .rec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .rec-card { padding: 18px; border-radius: 8px; border: 1px solid; }
+    .rec-card.green { border-color: #4AAB7E; background: rgba(74,171,126,0.06); }
+    .rec-card.red   { border-color: #D64545; background: rgba(214,69,69,0.06); }
+    .rec-card.blue  { border-color: #5B7FDB; background: rgba(91,127,219,0.06); }
+    .rec-card h4 { font-size: 0.9rem; margin-bottom: 6px; }
+    .rec-card.green h4 { color: #4AAB7E; }
+    .rec-card.red h4   { color: #D64545; }
+    .rec-card.blue h4  { color: #8aabf0; }
+    .rec-card p { font-size: 0.82rem; color: #bbb; margin-bottom: 6px; line-height: 1.5; }
+    .rec-card .campaigns { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: #666; margin-top: 6px; }
+    .rec-section-title { font-family: 'Fraunces', serif; font-size: 1rem; font-weight: 700; margin: 20px 0 12px; }
+
+    /* Download button */
+    .btn {
+      display: inline-block;
+      padding: 10px 20px;
+      border-radius: 6px;
+      border: 1px solid #3a3a3a;
+      background: #2a2a2a;
+      color: #e0e0e0;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      margin-top: 16px;
+    }
+    .btn:hover { background: #333; border-color: #5B7FDB; color: #fff; }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 32px 20px;
+      color: #444;
+      font-size: 0.78rem;
+      border-top: 1px solid #1a1a1a;
+      margin-top: 24px;
+    }
+
+    /* Section separator */
+    .section-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 8px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      header h1 { font-size: 1.4rem; }
+      .grid-2 { grid-template-columns: 1fr; }
+      .rec-grid { grid-template-columns: 1fr; }
+      .chip { font-size: 0.75rem; padding: 5px 12px; }
+      th, td { padding: 8px 10px; }
+    }
+
+    /* Chart.js tooltip dark override */
+    .chartjs-tooltip {
+      background: #1a1a1a !important;
+      border: 1px solid #2a2a2a !important;
+    }
+  </style>
 </head>
 <body>
-<div class="header">
+
+<header>
+  <div class="section-label">Panel 0 / Overview</div>
   <h1>MPL Incent Channel Deep Dive</h1>
-  <div class="sub">US &nbsp;·&nbsp; D7 Matured Data &nbsp;·&nbsp; Apr 20 – Jun 14, 2026 (8 Weeks) &nbsp;·&nbsp; Run: Jun 23, 2026</div>
+  <p class="subtitle">US &middot; D7 Matured Data &middot; Apr 20 &ndash; Jun 14, 2026 (8 Weeks)</p>
   <div class="banner">
-    <strong>⚠ SYNTHETIC DATA — BigQuery OAuth token expired during this run.</strong>
-    Data is representative/illustrative based on the channel performance framework.
-    Re-authorize <code>mpl_bigquery_mcp</code> in Claude Code settings to restore live data, then re-trigger this routine.
-    &nbsp;|&nbsp; Last matured week: Jun 8–14 &nbsp;·&nbsp; D7 window closes: login_date + 7 ≤ Jun 22, 2026
+    &#9888;&#65039; SYNTHETIC DATA &mdash; BigQuery OAuth token expired. Re-authorize mpl_bigquery_mcp to load live data.
   </div>
-</div>
+  <p class="run-info mono">Run date: Jun 23, 2026 | Last matured week: Jun 8&ndash;14 | D7 mature threshold: login date + 7 &le; Jun 22</p>
+</header>
 
-<div class="main">
+<div class="container">
 
-<!-- PANEL I -->
-<div class="panel section-anchor" id="panel1">
-  <div class="panel-title">Panel I — Weekly Spend by Channel</div>
-  <div class="chart-wrap" style="height:320px">
-    <canvas id="spendChart"></canvas>
-  </div>
-</div>
-
-<!-- PANEL II -->
-<div class="panel section-anchor" id="panel2">
-  <div class="panel-title">Panel II — D7 Quality Signals</div>
-  <div class="chart-row chart-row-2">
-    <div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600">D7 Depositor CVR %&nbsp; <span style="color:#888">(all logins denominator · platform ~17.2%)</span></div>
-      <div class="chart-wrap"><canvas id="cvrChart"></canvas></div>
-    </div>
-    <div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600">D7 Level &gt;20 %&nbsp; <span style="color:#888">(player logins denominator · platform ~28.5%)</span></div>
-      <div class="chart-wrap"><canvas id="lvlChart"></canvas></div>
-    </div>
-  </div>
-</div>
-
-<!-- PANEL III -->
-<div class="panel section-anchor" id="panel3">
-  <div class="panel-title">Panel III — Channel Deep Dive</div>
-  <div class="chips">
-    <button class="chip chip-ibd active" onclick="selectChannel('inboxdollars',this)">InboxDollars</button>
-    <button class="chip chip-maf" onclick="selectChannel('myappfree',this)">MyAppFree</button>
-    <button class="chip chip-ada" onclick="selectChannel('adaction',this)">AdAction</button>
-    <button class="chip chip-frc" onclick="selectChannel('freecash',this)">FreeCash</button>
-    <button class="chip chip-ksk" onclick="selectChannel('kashkick',this)">KashKick</button>
-  </div>
-  <div class="controls">
-    <label style="color:var(--muted);font-size:12px">Category:</label>
-    <select id="catSelect" onchange="updateDeepDive()">
-      <option value="overall">Overall</option>
-      <option value="bingo">Bingo</option>
-      <option value="solitaire">Solitaire</option>
-      <option value="ginrummy">GinRummy</option>
-    </select>
-  </div>
-  <div class="chart-wrap" style="height:340px">
-    <canvas id="deepDiveChart"></canvas>
-  </div>
-</div>
-
-<!-- PANEL IV -->
-<div class="panel section-anchor" id="panel4">
-  <div class="panel-title">Panel IV — SiteID Drilldown</div>
-  <div class="controls">
-    <label style="color:var(--muted);font-size:12px">Channel:</label>
-    <select id="siteidChanSelect" onchange="updateSiteid()">
-      <option value="adaction">AdAction</option>
-      <option value="myappfree">MyAppFree</option>
-      <option value="inboxdollars">InboxDollars</option>
-      <option value="freecash">FreeCash</option>
-      <option value="kashkick">KashKick</option>
-    </select>
-  </div>
-  <div id="siteid-note-ibd" class="note-box hidden">
-    ⚠ <strong>Reporting change — Mar 23, 2026:</strong> InboxDollars migrated from single <code>Prodege</code> siteid to <code>vc-*</code> codes.
-    This is a <strong>provider reporting change, NOT an acquisition event</strong>. Do not compare pre/post siteid-level CVR metrics as acquisition-quality shifts.
-    Channel-level metrics are unaffected.
-  </div>
-  <div id="siteid-table-wrap"></div>
-</div>
-
-<!-- PANEL V — Summary Tables -->
-<div class="panel section-anchor" id="panel5">
-  <div class="panel-title">Panel V — L4W vs W5-8 Comparison & WoW</div>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <div style="font-size:13px;color:var(--muted)"><strong style="color:#e8e8e8">Table A:</strong> L4W Avg (May 18–Jun 14) vs W5-8 Avg (Apr 20–May 17)</div>
-    <button class="download-btn" onclick="downloadCSV()">⬇ Download CSV</button>
-  </div>
-  <div class="tbl-wrap">
-    <table id="summaryTable">
-      <thead>
-        <tr>
-          <th>Channel</th>
-          <th>L4W Spend $K</th><th>W5-8 Spend $K</th>
-          <th>L4W CVR%</th><th>W5-8 CVR%</th><th>Δ CVR pp</th>
-          <th>L4W Lvl>20%</th><th>W5-8 Lvl>20%</th>
-          <th>L4W ROAS%</th><th>W5-8 ROAS%</th><th>Δ ROAS pp</th><th>Rating</th>
-        </tr>
-      </thead>
-      <tbody id="summaryTbody"></tbody>
-    </table>
-  </div>
-  <div style="font-size:13px;color:var(--muted);margin:20px 0 12px"><strong style="color:#e8e8e8">Table B:</strong> WoW — Latest Matured Week (Jun 8–14) vs Prior (Jun 1–7)</div>
-  <div class="tbl-wrap">
-    <table id="wowTable">
-      <thead>
-        <tr>
-          <th>Channel</th>
-          <th>W8 Spend $K</th><th>W7 Spend $K</th><th>Δ Spend%</th>
-          <th>W8 CVR%</th><th>W7 CVR%</th><th>WoW CVR pp</th>
-          <th>W8 ROAS%</th><th>W7 ROAS%</th><th>WoW ROAS pp</th><th>Signal</th>
-        </tr>
-      </thead>
-      <tbody id="wowTbody"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- PANEL VI — Recommendations -->
-<div class="panel section-anchor" id="panel6">
-  <div class="panel-title">Panel VI — SiteID Flags & Recommendations</div>
-  <div class="reco-grid">
-    <div class="reco-card reco-up">
-      <h4>✅ Scale Up</h4>
-      <ul>
-        <li><strong>KashKick — All campaigns (+30% budget)</strong><br>CVR 14.1% (highest incent partner), ROAS 23.2%, L4W stable. Best available quality.<br>
-          <span class="campaign-tag">mcspapac_Mplus_kashkick_Bingo_*</span><br>
-          <span class="campaign-tag">mcspapac_Mplus_kashkick_Solitaire_*</span><br>
-          <span class="campaign-tag">mcspapac_Mplus_kashkick_GinRummy_*</span></li>
-        <li style="margin-top:10px"><strong>MyAppFree — SiteID 3739: maximize budget</strong><br>CVR 12.5% (+1.3pp vs W5-8), ROAS 23.5% (+2.7pp). Consistently improving.<br>
-          <span class="campaign-tag">mcspapac_Mplus_myappfre_Bingo_*</span><br>
-          <span class="campaign-tag">mcspapac_Mplus_myappfre_Solitaire_*</span></li>
-        <li style="margin-top:10px"><strong>AdAction — SiteID 329825370: reallocate from 329830666</strong><br>CVR 13.2% (+3.4pp vs W5-8), ROAS 24.8% (+7.3pp). Best ROAS in channel.<br>
-          <span class="campaign-tag">mcspapac_Mplus_adaction_Bingo_*</span><br>
-          <span class="campaign-tag">mcspapac_Mplus_adaction_Solitaire_*</span></li>
-      </ul>
-    </div>
-    <div class="reco-card reco-down">
-      <h4>🔴 Scale Down / Pause</h4>
-      <ul>
-        <li><strong>InboxDollars — vc-002 &amp; vc-003: pause immediately</strong><br>ROAS 8.8%/7.5% (RED). CVR declined 8 consecutive weeks (8.4%→6.2%). GinRummy first, then Solitaire.<br>
-          <span class="campaign-tag">mcspapac_Mplus_inboxdollar_GinRummy_*</span><br>
-          <span class="campaign-tag">mcspapac_Mplus_inboxdollar_Solitaire_*</span></li>
-        <li style="margin-top:10px"><strong>MyAppFree — SiteID 2615937: -50% budget</strong><br>CVR 7.2% (declining from 8.1%), ROAS 11.2% and falling.<br>
-          <span class="campaign-tag">mcspapac_Mplus_myappfre_GinRummy_*</span></li>
-        <li style="margin-top:10px"><strong>AdAction — SiteID 329830666: cap at 20% of channel</strong><br>ROAS dropped -4.1pp vs W5-8. CVR deteriorating. Driving W8 quality dip.<br>
-          <span class="campaign-tag">mcspapac_Mplus_adaction_GinRummy_*</span></li>
-        <li style="margin-top:10px"><strong>FreeCash — Full pause review</strong><br>8 consecutive weeks in RED zone (ROAS 8-9%). No recovery signal.<br>
-          <span class="campaign-tag">mcspapac_Mplus_freecash_Bingo_*</span><br>
-          <span class="campaign-tag">mcspapac_Mplus_freecash_Solitaire_*</span><br>
-          <span class="campaign-tag">mcspapac_Mplus_freecash_GinRummy_*</span></li>
-      </ul>
+  <!-- PANEL I: Weekly Spend -->
+  <div class="card">
+    <div class="section-label">Panel I</div>
+    <div class="card-title">Weekly Spend by Channel</div>
+    <div class="card-subtitle">Total incent channel spend ($K) per week, stacked by channel</div>
+    <div class="chart-wrap">
+      <canvas id="spendChart"></canvas>
     </div>
   </div>
 
-  <div style="margin-top:20px;font-size:13px;font-weight:600;margin-bottom:12px;color:var(--muted)">Diagnostic Pattern Classification</div>
-  <div class="tbl-wrap">
-    <table>
-      <thead><tr><th>Channel</th><th>Pattern</th><th>Diagnosis</th></tr></thead>
-      <tbody>
-        <tr><td>InboxDollars</td><td>Falling spend + falling quality</td><td>Scale-down necessary but insufficient. Inventory mix worsening — vc-* codes delivering lower quality. Continue reducing, start with GinRummy.</td></tr>
-        <tr><td>MyAppFree</td><td>Flat spend + stable quality</td><td>Clean. SiteID split is the lever — 3739 is the quality anchor; 2615937 is the drag. Split budgets.</td></tr>
-        <tr><td>FreeCash</td><td>Flat spend + persistent low quality</td><td>Chronic underperformer. No trend toward 10% ROAS threshold. Recommend full pause review.</td></tr>
-        <tr><td>AdAction</td><td>Peaked W5, now reverting</td><td>Peak ROAS at May 18-24 (W5). SiteID 329830666 gaining share as 329825370 capped. Rebalance urgently.</td></tr>
-        <tr><td>KashKick</td><td>Small vol + high quality</td><td>Under-scaled relative to quality. Opportunity to grow before quality erodes. Scale proactively.</td></tr>
-      </tbody>
-    </table>
+  <!-- PANEL II: D7 Quality Signals -->
+  <div class="card">
+    <div class="section-label">Panel II</div>
+    <div class="card-title">D7 Quality Signals</div>
+    <div class="card-subtitle">D7 Dep CVR % and D7 Lvl&gt;20 % by channel vs platform benchmark</div>
+    <div class="grid-2">
+      <div>
+        <div style="font-size:0.82rem;color:#888;margin-bottom:10px;font-weight:600;">D7 Dep CVR %</div>
+        <div class="chart-wrap-sm">
+          <canvas id="cvrChart"></canvas>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:0.82rem;color:#888;margin-bottom:10px;font-weight:600;">D7 Lvl&gt;20 %</div>
+        <div class="chart-wrap-sm">
+          <canvas id="lvlChart"></canvas>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <div class="note-box" style="margin-top:16px">
-    <strong>Known Data Quirks:</strong>
-    (1) InboxDollars reporting change on Mar 23, 2026 — Prodege → vc-* codes; not an acquisition event.
-    (2) D7 maturity: login_date + 7 ≤ Jun 22 → last included week Jun 8–14. Week Jun 15–21 excluded (not yet matured).
-    (3) user_level_up_fat requires <code>SELECT DISTINCT</code> to avoid ~10x duplication.
-    (4) SYNTHETIC DATA — re-authorize mpl_bigquery_mcp for live figures.
+  <!-- PANEL III: Channel Deep Dive -->
+  <div class="card">
+    <div class="section-label">Panel III</div>
+    <div class="card-title">Channel Deep Dive</div>
+    <div class="card-subtitle">Spend + CVR + Lvl&gt;20 + ROAS — click a channel, optionally filter by category</div>
+    <div class="controls-row">
+      <div class="chip-group" id="channelChips">
+        <span class="chip chip-inboxdollars" onclick="setChannel('inboxdollars')">InboxDollars</span>
+        <span class="chip chip-myappfree"    onclick="setChannel('myappfree')">MyAppFree</span>
+        <span class="chip chip-adaction active"     onclick="setChannel('adaction')">AdAction</span>
+        <span class="chip chip-freecash"    onclick="setChannel('freecash')">FreeCash</span>
+        <span class="chip chip-kashkick"    onclick="setChannel('kashkick')">KashKick</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="controls-label">Category:</span>
+        <select class="styled-select" id="catSelect" onchange="setCategory(this.value)">
+          <option value="Overall">Overall</option>
+          <option value="Bingo">Bingo</option>
+          <option value="Solitaire">Solitaire</option>
+          <option value="GinRummy">Gin Rummy</option>
+        </select>
+      </div>
+    </div>
+    <div id="catNotice" class="notice-box" style="display:none;">
+      Category breakdown not available for this channel &mdash; showing Overall
+    </div>
+    <div class="chart-wrap" style="height:340px;">
+      <canvas id="deepDiveChart"></canvas>
+    </div>
+    <div class="roas-mini-table" id="roasMiniTable"></div>
   </div>
-</div>
 
-</div><!-- /main -->
+  <!-- PANEL IV: SiteID Drilldown -->
+  <div class="card">
+    <div class="section-label">Panel IV</div>
+    <div class="card-title">SiteID Drilldown</div>
+    <div class="card-subtitle">Sub-source quality comparison: L4W (W5&ndash;W8) vs W1&ndash;W4 baseline</div>
+    <div class="controls-row" style="margin-bottom:16px;">
+      <span class="controls-label">Channel:</span>
+      <select class="styled-select" id="siteChannelSelect" onchange="renderSiteTable(this.value)">
+        <option value="adaction">AdAction</option>
+        <option value="myappfree">MyAppFree</option>
+        <option value="inboxdollars">InboxDollars</option>
+        <option value="freecash">FreeCash</option>
+        <option value="kashkick">KashKick</option>
+      </select>
+    </div>
+    <div id="siteTableContainer" class="table-wrap"></div>
+  </div>
+
+  <!-- PANEL V: Summary Tables -->
+  <div class="card">
+    <div class="section-label">Panel V</div>
+    <div class="card-title">Summary Tables</div>
+    <div class="card-subtitle">Period comparison and week-over-week signals</div>
+    <div class="grid-2" style="margin-bottom:0;">
+      <div>
+        <div style="font-size:0.82rem;color:#888;margin-bottom:10px;font-weight:600;">Table A &mdash; Period Comparison (W1&ndash;4 vs W5&ndash;8)</div>
+        <div class="table-wrap" id="periodTableWrap"></div>
+      </div>
+      <div>
+        <div style="font-size:0.82rem;color:#888;margin-bottom:10px;font-weight:600;">Table B &mdash; WoW (Jun 8&ndash;14 vs Jun 1&ndash;7)</div>
+        <div class="table-wrap" id="wowTableWrap"></div>
+      </div>
+    </div>
+    <button class="btn" onclick="downloadCSV()">&#8659; Download Summary CSV</button>
+  </div>
+
+  <!-- PANEL VI: Recommendations -->
+  <div class="card">
+    <div class="section-label">Panel VI</div>
+    <div class="card-title">Recommendations</div>
+    <div class="card-subtitle">Action priorities based on 8-week trend analysis</div>
+
+    <div class="rec-section-title" style="color:#4AAB7E;">&#8679; Scale Up</div>
+    <div class="rec-grid">
+      <div class="rec-card green">
+        <h4>1. KashKick (all campaigns)</h4>
+        <p>CVR trending 13.5%, ROAS 21.5%, consistently above channel average across all 8 weeks. Small absolute spend base creates room for +30% budget without saturation risk.</p>
+        <div class="campaigns">mcspapac_Mplus_kashkick_Bingo_*<br>mcspapac_Mplus_kashkick_Solitaire_*<br>mcspapac_Mplus_kashkick_GinRummy_*</div>
+      </div>
+      <div class="rec-card green">
+        <h4>2. MyAppFree SiteID 3739</h4>
+        <p>CVR 12.5% vs channel avg 10.4%; ROAS 23.5% (healthy AMBER zone, approaching GREEN). This sub-source is masking drag from SiteID 2615937. Isolate and scale.</p>
+        <div class="campaigns">mcspapac_Mplus_myappfre_Bingo_*<br>mcspapac_Mplus_myappfre_Solitaire_*</div>
+      </div>
+      <div class="rec-card green">
+        <h4>3. AdAction SiteID 329825370</h4>
+        <p>ROAS 24.8% (best in AdAction book), CVR 13.2% &mdash; materially above channel average 9.4%. Scale to offset declines in 329830666.</p>
+        <div class="campaigns">mcspapac_Mplus_adaction_Bingo_*<br>mcspapac_Mplus_adaction_Solitaire_*</div>
+      </div>
+    </div>
+
+    <div class="rec-section-title" style="color:#D64545;margin-top:24px;">&#8681; Scale Down / Pause</div>
+    <div class="rec-grid">
+      <div class="rec-card red">
+        <h4>4. InboxDollars vc-002 &amp; vc-003</h4>
+        <p>CVR 6.5% / 5.8%, ROAS 8.8% / 7.5% &mdash; both in RED zone (&lt;10%). Sustained 8-week CVR decline from 8.4% &rarr; 6.2% at channel level. Reduce GinRummy first, then full channel.</p>
+        <div class="campaigns">All mcspapac_Mplus_inboxdollar_* campaigns<br>(GinRummy category first)</div>
+      </div>
+      <div class="rec-card red">
+        <h4>5. MyAppFree SiteID 2615937</h4>
+        <p>CVR 7.2%, ROAS 11.2% declining (was 13.5% in W1-4), below channel median. Reallocate budget to SiteID 3739.</p>
+        <div class="campaigns">mcspapac_Mplus_myappfre_GinRummy_*</div>
+      </div>
+      <div class="rec-card red">
+        <h4>6. AdAction SiteID 329830666</h4>
+        <p>ROAS 12.4%, CVR fell from 9.2% &rarr; 7.8% (W1&ndash;4 &rarr; L4W). Declining trajectory despite spend increases in W4&ndash;5. Taper budget.</p>
+        <div class="campaigns">mcspapac_Mplus_adaction_GinRummy_*</div>
+      </div>
+      <div class="rec-card red">
+        <h4>7. FreeCash overall</h4>
+        <p>Consistent 8&ndash;9% ROAS (RED zone), CVR below 6.2% across all 8 weeks. No category showing improvement. Pause and monitor.</p>
+        <div class="campaigns">All mcspapac_Mplus_freecash_* campaigns</div>
+      </div>
+    </div>
+
+    <div class="rec-section-title" style="color:#8aabf0;margin-top:24px;">&#9432; Diagnostic Patterns</div>
+    <div class="rec-grid">
+      <div class="rec-card blue">
+        <h4>InboxDollars: Accelerating Decline</h4>
+        <p>Falling spend + falling quality indicates scale-down was initiated but quality degraded faster than budget was cut. The inventory mix has shifted adversely. Continue reducing &mdash; do not wait for stabilization.</p>
+      </div>
+      <div class="rec-card blue">
+        <h4>AdAction: Peaked W5, Now Reverting</h4>
+        <p>Channel peaked at W5 (May 18&ndash;24) across all metrics. Mix shift toward SiteID 329830666 (growing volume share) is pulling averages down. Enforce siteid-level spend caps.</p>
+      </div>
+      <div class="rec-card blue">
+        <h4>KashKick: Early Mover Opportunity</h4>
+        <p>Small absolute base but ROAS has been in 21&ndash;25% range for 8 weeks &mdash; reward with scale before competitors saturate this channel. Watch for CVR degradation as volume grows.</p>
+      </div>
+      <div class="rec-card blue">
+        <h4>MyAppFree: SiteID Masking Effect</h4>
+        <p>Channel-level averages appear stable (CVR ~10.4%, ROAS ~18.9%) but SiteID 3739 is masking 2615937 drag. Without siteid budget splits, reallocation will not happen automatically.</p>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
 
 <footer>
-  Generated by Claude Code &nbsp;·&nbsp; MPL Analytics &nbsp;·&nbsp; Jun 23, 2026<br>
-  Data: Synthetic (BigQuery OAuth expired) &nbsp;·&nbsp; Re-run after mpl_bigquery_mcp re-authorization
+  <p>Generated by Claude Code &middot; MPL Analytics &middot; Jun 23, 2026 &middot; Data: Synthetic (BQ auth required for live)</p>
 </footer>
 
 <script>
-const WEEKS = ['Apr 20','Apr 27','May 04','May 11','May 18','May 25','Jun 01','Jun 08'];
-const CH_COLOR = {
-  inboxdollars:'#D64545', myappfree:'#E8A33D',
-  adaction:'#5B7FDB', freecash:'#4AAB7E', kashkick:'#9B59B6', platform:'#666'
-};
-const CH_LABEL = {
-  inboxdollars:'InboxDollars', myappfree:'MyAppFree',
-  adaction:'AdAction', freecash:'FreeCash', kashkick:'KashKick'
+// ============================================================
+// DATA
+// ============================================================
+const WEEKS = ['Apr 20', 'Apr 27', 'May 04', 'May 11', 'May 18', 'May 25', 'Jun 01', 'Jun 08'];
+
+const SPEND = {
+  inboxdollars: [45.2, 48.7, 52.1, 49.8, 42.3, 38.5, 35.2, 31.8],
+  myappfree:    [28.4, 30.2, 32.8, 35.1, 33.6, 31.2, 28.9, 26.4],
+  freecash:     [12.5, 13.8, 15.2, 16.8, 14.5, 13.2, 12.8, 11.5],
+  adaction:     [35.6, 38.9, 42.4, 45.8, 48.2, 44.5, 38.2, 32.1],
+  kashkick:     [6.8,  7.2,  7.8,  8.5,  8.2,  7.5,  6.8,  5.9],
 };
 
-// --- Raw Data ---
-const DATA = {
-  spend: {
-    inboxdollars:[45.2,48.7,52.1,49.8,42.3,38.5,35.2,31.8],
-    myappfree:   [28.4,30.2,32.8,35.1,33.6,31.2,28.9,26.4],
-    freecash:    [12.5,13.8,15.2,16.8,14.5,13.2,12.8,11.5],
-    adaction:    [35.6,38.9,42.4,45.8,48.2,44.5,38.2,32.1],
-    kashkick:    [6.8, 7.2, 7.8, 8.5, 8.2, 7.5, 6.8, 5.9]
-  },
-  cvr: {
-    platform:    [17.8,17.5,17.2,17.0,16.8,17.2,17.5,17.2],
-    inboxdollars:[8.4, 8.6, 8.2, 7.9, 7.5, 7.1, 6.8, 6.2],
-    myappfree:   [10.2,10.5,10.8,11.2,11.0,10.6,10.8,10.4],
-    freecash:    [5.8, 6.2, 6.0, 5.5, 5.8, 5.9, 6.1, 5.7],
-    adaction:    [9.2, 9.8,10.5,11.2,12.1,11.5,10.2, 9.4],
-    kashkick:    [14.2,14.8,15.2,15.5,14.9,14.2,13.8,13.5]
-  },
-  lvl: {
-    platform:    [29.5,29.2,28.8,28.5,28.2,28.8,29.1,28.5],
-    inboxdollars:[18.5,18.8,18.2,17.8,17.2,16.8,16.2,15.5],
-    myappfree:   [22.5,23.1,23.8,24.2,23.9,23.2,22.8,22.4],
-    freecash:    [14.2,14.8,15.1,13.8,14.2,14.5,14.8,13.9],
-    adaction:    [20.5,21.8,22.5,23.8,25.2,24.1,22.5,21.2],
-    kashkick:    [28.5,29.2,30.1,30.5,29.8,28.9,28.2,27.5]
-  },
-  roas: {
-    inboxdollars:[14.2,14.8,13.8,12.5,11.8,10.5, 9.8, 8.5],
-    myappfree:   [18.5,19.2,20.1,21.5,21.2,20.5,19.8,18.9],
-    freecash:    [8.2, 8.8, 9.2, 8.5, 8.8, 9.1, 8.9, 8.2],
-    adaction:    [16.5,17.8,19.2,21.5,23.2,21.8,18.5,16.2],
-    kashkick:    [22.5,23.8,24.5,25.2,24.8,23.5,22.8,21.5]
-  }
+const CVR = {
+  platform:     [17.8, 17.5, 17.2, 17.0, 16.8, 17.2, 17.5, 17.2],
+  inboxdollars: [8.4,  8.6,  8.2,  7.9,  7.5,  7.1,  6.8,  6.2],
+  myappfree:    [10.2, 10.5, 10.8, 11.2, 11.0, 10.6, 10.8, 10.4],
+  freecash:     [5.8,  6.2,  6.0,  5.5,  5.8,  5.9,  6.1,  5.7],
+  adaction:     [9.2,  9.8,  10.5, 11.2, 12.1, 11.5, 10.2, 9.4],
+  kashkick:     [14.2, 14.8, 15.2, 15.5, 14.9, 14.2, 13.8, 13.5],
 };
 
-// Category CVR overrides (Overall = base DATA.cvr, others as below)
+const LVL = {
+  platform:     [29.5, 29.2, 28.8, 28.5, 28.2, 28.8, 29.1, 28.5],
+  inboxdollars: [18.5, 18.8, 18.2, 17.8, 17.2, 16.8, 16.2, 15.5],
+  myappfree:    [22.5, 23.1, 23.8, 24.2, 23.9, 23.2, 22.8, 22.4],
+  freecash:     [14.2, 14.8, 15.1, 13.8, 14.2, 14.5, 14.8, 13.9],
+  adaction:     [20.5, 21.8, 22.5, 23.8, 25.2, 24.1, 22.5, 21.2],
+  kashkick:     [28.5, 29.2, 30.1, 30.5, 29.8, 28.9, 28.2, 27.5],
+};
+
+const ROAS = {
+  inboxdollars: [14.2, 14.8, 13.8, 12.5, 11.8, 10.5,  9.8,  8.5],
+  myappfree:    [18.5, 19.2, 20.1, 21.5, 21.2, 20.5, 19.8, 18.9],
+  freecash:     [8.2,  8.8,  9.2,  8.5,  8.8,  9.1,  8.9,  8.2],
+  adaction:     [16.5, 17.8, 19.2, 21.5, 23.2, 21.8, 18.5, 16.2],
+  kashkick:     [22.5, 23.8, 24.5, 25.2, 24.8, 23.5, 22.8, 21.5],
+};
+
 const CAT_CVR = {
-  inboxdollars:{
-    bingo:    [9.2,9.5,9.0,8.6,8.1,7.8,7.4,6.9],
-    solitaire:[8.1,8.2,7.9,7.6,7.2,6.8,6.5,5.9],
-    ginrummy: [7.5,7.8,7.5,7.2,6.8,6.4,6.1,5.5]
+  inboxdollars: {
+    Bingo:     [9.2, 9.5, 9.0, 8.6, 8.1, 7.8, 7.4, 6.9],
+    Solitaire: [8.1, 8.2, 7.9, 7.6, 7.2, 6.8, 6.5, 5.9],
+    GinRummy:  [7.5, 7.8, 7.5, 7.2, 6.8, 6.4, 6.1, 5.5],
   },
-  adaction:{
-    bingo:    [10.5,11.2,12.0,12.8,13.5,12.8,11.5,10.8],
-    solitaire:[9.0, 9.5,10.2,11.0,12.0,11.2,10.0, 9.2],
-    ginrummy: [7.8, 8.2, 8.8, 9.5,10.5, 9.8, 8.5, 7.8]
-  }
+  adaction: {
+    Bingo:     [10.5, 11.2, 12.0, 12.8, 13.5, 12.8, 11.5, 10.8],
+    Solitaire: [9.0,  9.5,  10.2, 11.0, 12.0, 11.2, 10.0, 9.2],
+    GinRummy:  [7.8,  8.2,  8.8,  9.5,  10.5, 9.8,  8.5,  7.8],
+  },
 };
+
 const CAT_LVL = {
-  inboxdollars:{
-    bingo:    [20.2,20.5,19.8,19.2,18.5,18.0,17.5,16.8],
-    solitaire:[17.8,18.2,17.5,17.0,16.5,16.0,15.5,14.8],
-    ginrummy: [16.5,16.8,16.2,15.8,15.2,14.8,14.2,13.5]
+  inboxdollars: {
+    Bingo:     [20.2, 20.5, 19.8, 19.2, 18.5, 18.0, 17.5, 16.8],
+    Solitaire: [17.8, 18.2, 17.5, 17.0, 16.5, 16.0, 15.5, 14.8],
+    GinRummy:  [16.5, 16.8, 16.2, 15.8, 15.2, 14.8, 14.2, 13.5],
   },
-  adaction:{
-    bingo:    [22.5,23.8,24.5,25.8,27.2,26.0,24.2,23.0],
-    solitaire:[20.0,21.2,22.0,23.2,24.5,23.5,21.8,20.5],
-    ginrummy: [18.0,19.2,20.0,21.2,22.5,21.5,19.8,18.5]
-  }
+  adaction: {
+    Bingo:     [22.5, 23.8, 24.5, 25.8, 27.2, 26.0, 24.2, 23.0],
+    Solitaire: [20.0, 21.2, 22.0, 23.2, 24.5, 23.5, 21.8, 20.5],
+    GinRummy:  [18.0, 19.2, 20.0, 21.2, 22.5, 21.5, 19.8, 18.5],
+  },
 };
+
 const CAT_ROAS = {
-  inboxdollars:{
-    bingo:    [15.5,16.2,15.2,13.8,12.8,11.5,10.8, 9.5],
-    solitaire:[13.5,14.0,13.0,11.8,11.0, 9.8, 9.2, 7.9],
-    ginrummy: [12.8,13.2,12.5,11.2,10.5, 9.2, 8.6, 7.4]
+  inboxdollars: {
+    Bingo:     [15.5, 16.2, 15.2, 13.8, 12.8, 11.5, 10.8, 9.5],
+    Solitaire: [13.5, 14.0, 13.0, 11.8, 11.0,  9.8,  9.2, 7.9],
+    GinRummy:  [12.8, 13.2, 12.5, 11.2, 10.5,  9.2,  8.6, 7.4],
   },
-  adaction:{
-    bingo:    [18.5,19.8,21.5,23.8,25.8,24.2,20.5,18.2],
-    solitaire:[15.5,16.8,18.2,20.5,22.0,20.8,17.5,15.2],
-    ginrummy: [13.2,14.5,16.0,18.2,20.5,18.5,15.8,13.0]
+  adaction: {
+    Bingo:     [18.5, 19.8, 21.5, 23.8, 25.8, 24.2, 20.5, 18.2],
+    Solitaire: [15.5, 16.8, 18.2, 20.5, 22.0, 20.8, 17.5, 15.2],
+    GinRummy:  [13.2, 14.5, 16.0, 18.2, 20.5, 18.5, 15.8, 13.0],
+  },
+};
+
+const SITEIDS = {
+  adaction: [
+    {id:'329825370', logins_l4w:8240, cvr_l4w:13.2, lvl_l4w:26.5, roas_l4w:24.8, cvr_w58:9.8,  lvl_w58:21.5, roas_w58:17.5, status:'SCALE UP'},
+    {id:'329830666', logins_l4w:5820, cvr_l4w:7.8,  lvl_l4w:18.2, roas_l4w:12.4, cvr_w58:9.2,  lvl_w58:20.8, roas_w58:16.5, status:'SCALE DOWN'},
+    {id:'329831245', logins_l4w:3420, cvr_l4w:10.5, lvl_l4w:22.1, roas_l4w:18.2, cvr_w58:10.1, lvl_w58:21.8, roas_w58:17.8, status:'STABLE'},
+    {id:'329842891', logins_l4w:1280, cvr_l4w:9.8,  lvl_l4w:21.5, roas_l4w:16.5, cvr_w58:8.5,  lvl_w58:19.2, roas_w58:14.2, status:'WATCH'},
+  ],
+  myappfree: [
+    {id:'3739',    logins_l4w:6820, cvr_l4w:12.5, lvl_l4w:25.8, roas_l4w:23.5, cvr_w58:11.2, lvl_w58:23.5, roas_w58:20.8, status:'SCALE UP'},
+    {id:'2036',    logins_l4w:4250, cvr_l4w:9.8,  lvl_l4w:21.2, roas_l4w:17.8, cvr_w58:9.5,  lvl_w58:20.8, roas_w58:17.2, status:'STABLE'},
+    {id:'2615937', logins_l4w:2180, cvr_l4w:7.2,  lvl_l4w:16.8, roas_l4w:11.2, cvr_w58:8.1,  lvl_w58:18.2, roas_w58:13.5, status:'SCALE DOWN'},
+  ],
+  inboxdollars: [
+    {id:'vc-001', logins_l4w:3820, cvr_l4w:7.2, lvl_l4w:16.5, roas_l4w:10.2, cvr_w58:null, lvl_w58:null, roas_w58:null, status:'MONITOR', note:'Post-Mar23'},
+    {id:'vc-002', logins_l4w:2950, cvr_l4w:6.5, lvl_l4w:15.8, roas_l4w:8.8,  cvr_w58:null, lvl_w58:null, roas_w58:null, status:'SCALE DOWN', note:'Post-Mar23'},
+    {id:'vc-003', logins_l4w:2180, cvr_l4w:5.8, lvl_l4w:14.2, roas_l4w:7.5,  cvr_w58:null, lvl_w58:null, roas_w58:null, status:'SCALE DOWN', note:'Post-Mar23'},
+    {id:'Prodege',logins_l4w:1850, cvr_l4w:8.2, lvl_l4w:17.5, roas_l4w:11.5, cvr_w58:8.8,  lvl_w58:18.5, roas_w58:12.2, status:'HISTORICAL', note:'Pre-Mar23 only'},
+  ],
+};
+
+// ============================================================
+// CONSTANTS
+// ============================================================
+const COLORS = {
+  inboxdollars: '#D64545',
+  myappfree:    '#E8A33D',
+  adaction:     '#5B7FDB',
+  freecash:     '#4AAB7E',
+  kashkick:     '#9B59B6',
+  platform:     '#888888',
+};
+const CHANNEL_NAMES = {
+  inboxdollars: 'InboxDollars',
+  myappfree:    'MyAppFree',
+  adaction:     'AdAction',
+  freecash:     'FreeCash',
+  kashkick:     'KashKick',
+};
+const CHANNEL_ORDER = ['inboxdollars', 'myappfree', 'adaction', 'freecash', 'kashkick'];
+
+// ============================================================
+// HELPERS
+// ============================================================
+function avg(arr, start, end) {
+  const slice = arr.slice(start, end);
+  return slice.reduce((a, b) => a + b, 0) / slice.length;
+}
+
+function fmt1(v) { return v == null ? 'N/A' : v.toFixed(1); }
+function fmtPct(v) { return v == null ? 'N/A' : v.toFixed(1) + '%'; }
+function fmtDelta(v, suffix) {
+  if (v == null) return '<span class="delta-null">&mdash;</span>';
+  const sign = v >= 0 ? '+' : '';
+  const cls = v >= 0 ? 'delta-pos' : 'delta-neg';
+  return '<span class="' + cls + '">' + sign + v.toFixed(1) + (suffix || '') + '</span>';
+}
+
+function roasColor(v) {
+  if (v == null) return '#888';
+  if (v >= 30) return '#4AAB7E';
+  if (v >= 10) return '#E8A33D';
+  return '#D64545';
+}
+function roasClass(v) {
+  if (v == null) return 'roas-amber';
+  if (v >= 30) return 'roas-green';
+  if (v >= 10) return 'roas-amber';
+  return 'roas-red';
+}
+function roasLabel(v) {
+  if (v == null) return 'N/A';
+  if (v >= 30) return 'GREEN';
+  if (v >= 10) return 'AMBER';
+  return 'RED';
+}
+
+function badgeHtml(status) {
+  const cls = 'badge badge-' + status.replace(' ', '-');
+  return '<span class="' + cls + '">' + status + '</span>';
+}
+
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: { duration: 600 },
+  plugins: {
+    legend: {
+      position: 'top',
+      labels: { color: '#aaa', font: { size: 11 }, boxWidth: 12, padding: 16 }
+    },
+    tooltip: {
+      backgroundColor: '#1a1a1a',
+      borderColor: '#2a2a2a',
+      borderWidth: 1,
+      titleColor: '#e0e0e0',
+      bodyColor: '#aaa',
+      padding: 10,
+    }
+  },
+  scales: {
+    x: {
+      ticks: { color: '#666', font: { size: 11 } },
+      grid: { color: '#1e1e1e' },
+    },
+    y: {
+      ticks: { color: '#666', font: { size: 11 } },
+      grid: { color: '#222' },
+    }
   }
 };
 
-// SiteID data
-const SITEID_DATA = {
-  adaction:[
-    {id:'329825370',l4w_logins:8240,l4w_cvr:13.2,l4w_lvl:26.5,l4w_roas:24.8,w58_cvr:9.8,w58_lvl:21.5,w58_roas:17.5,action:'SCALE UP'},
-    {id:'329830666',l4w_logins:5820,l4w_cvr:7.8,l4w_lvl:18.2,l4w_roas:12.4,w58_cvr:9.2,w58_lvl:20.8,w58_roas:16.5,action:'SCALE DOWN'},
-    {id:'329831245',l4w_logins:3420,l4w_cvr:10.5,l4w_lvl:22.1,l4w_roas:18.2,w58_cvr:10.1,w58_lvl:21.8,w58_roas:17.8,action:'STABLE'},
-    {id:'329842891',l4w_logins:1280,l4w_cvr:9.8,l4w_lvl:21.5,l4w_roas:16.5,w58_cvr:8.5,w58_lvl:19.2,w58_roas:14.2,action:'WATCH'}
-  ],
-  myappfree:[
-    {id:'3739',   l4w_logins:6820,l4w_cvr:12.5,l4w_lvl:25.8,l4w_roas:23.5,w58_cvr:11.2,w58_lvl:23.5,w58_roas:20.8,action:'SCALE UP'},
-    {id:'2036',   l4w_logins:4250,l4w_cvr:9.8, l4w_lvl:21.2,l4w_roas:17.8,w58_cvr:9.5, w58_lvl:20.8,w58_roas:17.2,action:'STABLE'},
-    {id:'2615937',l4w_logins:2180,l4w_cvr:7.2, l4w_lvl:16.8,l4w_roas:11.2,w58_cvr:8.1, w58_lvl:18.2,w58_roas:13.5,action:'SCALE DOWN'}
-  ],
-  inboxdollars:[
-    {id:'vc-001', l4w_logins:3820,l4w_cvr:7.2,l4w_lvl:16.5,l4w_roas:10.2,w58_cvr:null,w58_lvl:null,w58_roas:null,action:'MONITOR',note:'Post-Mar23'},
-    {id:'vc-002', l4w_logins:2950,l4w_cvr:6.5,l4w_lvl:15.8,l4w_roas:8.8, w58_cvr:null,w58_lvl:null,w58_roas:null,action:'SCALE DOWN',note:'Post-Mar23'},
-    {id:'vc-003', l4w_logins:2180,l4w_cvr:5.8,l4w_lvl:14.2,l4w_roas:7.5, w58_cvr:null,w58_lvl:null,w58_roas:null,action:'SCALE DOWN',note:'Post-Mar23'},
-    {id:'Prodege',l4w_logins:1850,l4w_cvr:8.2,l4w_lvl:17.5,l4w_roas:11.5,w58_cvr:8.8, w58_lvl:18.5,w58_roas:12.2,action:'HISTORICAL',note:'Pre-Mar23 only'}
-  ]
-};
+// ============================================================
+// STATE
+// ============================================================
+let activeChannel = 'adaction';
+let activeCategory = 'Overall';
+let deepDiveChartInst = null;
 
-// Chart.js global defaults
-Chart.defaults.color = '#888';
-Chart.defaults.borderColor = '#2a2a2a';
-Chart.defaults.font.family = "'JetBrains Mono', monospace";
-
-function avg(arr) { return arr.reduce((a,b)=>a+b,0)/arr.length; }
-function avgN(arr, from, to) { return avg(arr.slice(from,to)); }
-function roasClass(v){ return v>=30?'roas-green':v>=10?'roas-amber':'roas-red'; }
-function roasRating(v){ return v>=30?'🟢 GREEN':v>=10?'🟡 AMBER':'🔴 RED'; }
-function deltaClass(v,rev=false){ return (v>0)!==rev?'delta-pos':'delta-neg'; }
-function sign(v){ return v>0?'+':''; }
-function actionTag(a){
-  if(a==='SCALE UP') return '<span class="tag-up">SCALE UP</span>';
-  if(a==='SCALE DOWN') return '<span class="tag-down">SCALE DOWN</span>';
-  if(a==='STABLE') return '<span class="tag-stable">STABLE</span>';
-  if(a==='MONITOR' || a==='WATCH') return '<span class="tag-watch">'+a+'</span>';
-  if(a==='HISTORICAL') return '<span class="tag-hist">HISTORICAL</span>';
-  return a;
-}
-
-// --- Chart helpers ---
-function baseChartOpts(yLabel){
-  return {
-    responsive:true, maintainAspectRatio:false,
-    interaction:{mode:'index',intersect:false},
-    plugins:{legend:{position:'top',labels:{boxWidth:10,padding:12,font:{size:11}}},tooltip:{backgroundColor:'#1a1a1a',borderColor:'#333',borderWidth:1,titleFont:{family:'JetBrains Mono'},bodyFont:{family:'JetBrains Mono'}}},
-    scales:{x:{grid:{color:'#1f1f1f'},ticks:{font:{size:11}}},y:{grid:{color:'#1f1f1f'},title:{display:true,text:yLabel,color:'#666',font:{size:10}},ticks:{font:{size:11}}}}
-  };
-}
-
-// --- PANEL I: Stacked Spend ---
-(function(){
+// ============================================================
+// PANEL I: SPEND CHART
+// ============================================================
+function buildSpendChart() {
   const ctx = document.getElementById('spendChart').getContext('2d');
-  const channels = ['inboxdollars','myappfree','adaction','freecash','kashkick'];
-  new Chart(ctx,{
-    type:'bar',
-    data:{
-      labels:WEEKS,
-      datasets: channels.map(ch=>({
-        label: CH_LABEL[ch],
-        data: DATA.spend[ch],
-        backgroundColor: CH_COLOR[ch]+'cc',
-        borderColor: CH_COLOR[ch],
-        borderWidth:1,
-        stack:'spend'
-      }))
-    },
-    options:{...baseChartOpts('Spend ($K)'),
-      plugins:{...baseChartOpts('').plugins,
-        tooltip:{...baseChartOpts('').plugins.tooltip,
-          callbacks:{label:ctx=>`${ctx.dataset.label}: $${ctx.parsed.y.toFixed(1)}K`}
+  const datasets = CHANNEL_ORDER.map(ch => ({
+    label: CHANNEL_NAMES[ch],
+    data: SPEND[ch],
+    backgroundColor: COLORS[ch],
+    borderColor: COLORS[ch],
+    borderWidth: 1,
+    stack: 'total',
+  }));
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: { labels: WEEKS, datasets },
+    options: {
+      ...chartDefaults,
+      plugins: {
+        ...chartDefaults.plugins,
+        tooltip: {
+          ...chartDefaults.plugins.tooltip,
+          callbacks: {
+            footer: (items) => {
+              const total = items.reduce((s, i) => s + i.raw, 0);
+              return 'Total: $' + total.toFixed(1) + 'K';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          stacked: true,
+          ticks: { color: '#666', font: { size: 11 } },
+          grid: { color: '#1e1e1e' },
+        },
+        y: {
+          stacked: true,
+          title: { display: true, text: 'Spend ($K)', color: '#666', font: { size: 11 } },
+          ticks: { color: '#666', font: { size: 11 }, callback: v => '$' + v + 'K' },
+          grid: { color: '#222' },
         }
       }
     }
   });
-})();
-
-// --- PANEL II: CVR & Lvl lines ---
-(function(){
-  const channels = ['inboxdollars','myappfree','adaction','freecash','kashkick'];
-  function mkDataset(ch, metric, dashed=false){
-    const isPlatform = ch==='platform';
-    return {
-      label: isPlatform?'Platform':CH_LABEL[ch],
-      data: metric[ch],
-      borderColor: isPlatform?'#666':CH_COLOR[ch],
-      backgroundColor:'transparent',
-      borderWidth: isPlatform?1.5:2,
-      borderDash: dashed||isPlatform?[5,5]:[],
-      pointRadius: isPlatform?0:3,
-      tension:.3
-    };
-  }
-  // CVR chart
-  new Chart(document.getElementById('cvrChart').getContext('2d'),{
-    type:'line',
-    data:{labels:WEEKS, datasets:['platform',...channels].map(ch=>mkDataset(ch,DATA.cvr))},
-    options:baseChartOpts('CVR %')
-  });
-  // Lvl chart
-  new Chart(document.getElementById('lvlChart').getContext('2d'),{
-    type:'line',
-    data:{labels:WEEKS, datasets:['platform',...channels].map(ch=>mkDataset(ch,DATA.lvl))},
-    options:baseChartOpts('Lvl>20 %')
-  });
-})();
-
-// --- PANEL III: Deep Dive ---
-let currentChannel = 'inboxdollars';
-let deepChart = null;
-
-function getCatData(ch, cat){
-  if(cat==='overall') return {cvr:DATA.cvr[ch], lvl:DATA.lvl[ch], roas:DATA.roas[ch], spend:DATA.spend[ch]};
-  const cvrArr = (CAT_CVR[ch]&&CAT_CVR[ch][cat]) || DATA.cvr[ch].map(v=>v*0.95);
-  const lvlArr = (CAT_LVL[ch]&&CAT_LVL[ch][cat]) || DATA.lvl[ch].map(v=>v*0.95);
-  const roasArr= (CAT_ROAS[ch]&&CAT_ROAS[ch][cat]) || DATA.roas[ch].map(v=>v*0.95);
-  const spendArr = DATA.spend[ch].map(v=>v*(cat==='bingo'?.42:cat==='solitaire'?.35:.23));
-  return {cvr:cvrArr, lvl:lvlArr, roas:roasArr, spend:spendArr};
 }
 
-function buildDeepDive(){
-  const ch = currentChannel;
-  const cat = document.getElementById('catSelect').value;
-  const d = getCatData(ch, cat);
-  const color = CH_COLOR[ch];
-  const ctx = document.getElementById('deepDiveChart').getContext('2d');
-  if(deepChart) deepChart.destroy();
-  deepChart = new Chart(ctx,{
-    type:'bar',
-    data:{
-      labels:WEEKS,
-      datasets:[
-        {type:'bar', label:'Spend ($K)', data:d.spend, backgroundColor:color+'44', borderColor:color+'88', borderWidth:1, yAxisID:'y'},
-        {type:'line', label:'D7 CVR %', data:d.cvr, borderColor:color, backgroundColor:'transparent', borderWidth:2.5, pointRadius:4, tension:.3, yAxisID:'y2'},
-        {type:'line', label:'D7 Lvl>20 %', data:d.lvl, borderColor:color, backgroundColor:'transparent', borderWidth:2, borderDash:[4,4], pointRadius:4, tension:.3, yAxisID:'y2'},
-        {type:'line', label:'D7 ROAS %', data:d.roas, borderColor:'#fff', backgroundColor:'transparent', borderWidth:2, borderDash:[8,4], pointRadius:3, tension:.3, yAxisID:'y3'}
-      ]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
-      plugins:{
-        legend:{position:'top',labels:{boxWidth:10,padding:12,font:{size:11}}},
-        tooltip:{backgroundColor:'#1a1a1a',borderColor:'#333',borderWidth:1,callbacks:{
-          afterBody: items=>{
-            const roas=d.roas[items[0].dataIndex];
-            return [`ROAS Rating: ${roasRating(roas)}`];
+// ============================================================
+// PANEL II: CVR + LVL CHARTS
+// ============================================================
+function buildLineChart(canvasId, data, yLabel) {
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  const channelDatasets = CHANNEL_ORDER.map(ch => ({
+    label: CHANNEL_NAMES[ch],
+    data: data[ch],
+    borderColor: COLORS[ch],
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    pointRadius: 3,
+    pointHoverRadius: 5,
+    tension: 0.3,
+  }));
+  const platformDataset = {
+    label: 'Platform Benchmark',
+    data: data.platform,
+    borderColor: '#888888',
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderDash: [6, 3],
+    pointRadius: 2,
+    tension: 0.3,
+  };
+
+  new Chart(ctx, {
+    type: 'line',
+    data: { labels: WEEKS, datasets: [...channelDatasets, platformDataset] },
+    options: {
+      ...chartDefaults,
+      plugins: {
+        ...chartDefaults.plugins,
+        tooltip: {
+          ...chartDefaults.plugins.tooltip,
+          callbacks: {
+            label: (item) => ' ' + item.dataset.label + ': ' + item.raw.toFixed(1) + '%'
           }
-        }}
+        }
       },
-      scales:{
-        x:{grid:{color:'#1f1f1f'},ticks:{font:{size:11}}},
-        y:{type:'linear',position:'left',grid:{color:'#1f1f1f'},title:{display:true,text:'Spend ($K)',color:'#666'},ticks:{font:{size:11}}},
-        y2:{type:'linear',position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'CVR / Lvl %',color:'#666'},ticks:{font:{size:11}}},
-        y3:{type:'linear',position:'right',display:false,ticks:{font:{size:11}}}
+      scales: {
+        x: {
+          ticks: { color: '#666', font: { size: 10 } },
+          grid: { color: '#1e1e1e' },
+        },
+        y: {
+          title: { display: true, text: yLabel, color: '#666', font: { size: 11 } },
+          ticks: { color: '#666', font: { size: 11 }, callback: v => v + '%' },
+          grid: { color: '#222' },
+        }
       }
     }
   });
 }
-buildDeepDive();
 
-function selectChannel(ch, el){
-  currentChannel = ch;
-  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
-  el.classList.add('active');
-  buildDeepDive();
+// ============================================================
+// PANEL III: DEEP DIVE CHART
+// ============================================================
+function setChannel(ch) {
+  activeChannel = ch;
+  document.querySelectorAll('#channelChips .chip').forEach(el => el.classList.remove('active'));
+  const chipMap = {
+    inboxdollars: 'chip-inboxdollars',
+    myappfree: 'chip-myappfree',
+    adaction: 'chip-adaction',
+    freecash: 'chip-freecash',
+    kashkick: 'chip-kashkick',
+  };
+  document.querySelectorAll('#channelChips .chip').forEach(el => {
+    if (el.classList.contains(chipMap[ch])) el.classList.add('active');
+  });
+  buildDeepDiveChart();
 }
-function updateDeepDive(){ buildDeepDive(); }
 
-// --- PANEL IV: SiteID Table ---
-function updateSiteid(){
-  const ch = document.getElementById('siteidChanSelect').value;
-  const noteDiv = document.getElementById('siteid-note-ibd');
-  noteDiv.classList.toggle('hidden', ch!=='inboxdollars');
-  const wrap = document.getElementById('siteid-table-wrap');
-  const rows = SITEID_DATA[ch];
-  if(!rows){
-    wrap.innerHTML = `<div class="siteid-msg">${ch==='freecash'?'FreeCash has a single sub-source — no siteid breakdown available.':'KashKick volume too small for reliable siteid-level analysis (&lt;200 logins/siteid).'}</div>`;
+function setCategory(cat) {
+  activeCategory = cat;
+  buildDeepDiveChart();
+}
+
+function getCatData(catObj, ch, cat) {
+  // Returns data array for category or null if not available
+  if (cat === 'Overall') return null;
+  if (catObj[ch] && catObj[ch][cat]) return catObj[ch][cat];
+  return null;
+}
+
+function buildDeepDiveChart() {
+  const ch = activeChannel;
+  const cat = activeCategory;
+  const color = COLORS[ch];
+  const name = CHANNEL_NAMES[ch];
+
+  // Determine if category data is available
+  const hasCatCVR  = getCatData(CAT_CVR, ch, cat);
+  const hasCatLVL  = getCatData(CAT_LVL, ch, cat);
+  const hasCatROAS = getCatData(CAT_ROAS, ch, cat);
+
+  const showNotice = (cat !== 'Overall') && (!hasCatCVR);
+  document.getElementById('catNotice').style.display = showNotice ? 'block' : 'none';
+
+  const cvrData  = hasCatCVR  || CVR[ch];
+  const lvlData  = hasCatLVL  || LVL[ch];
+  const roasData = hasCatROAS || ROAS[ch];
+  const spendData = SPEND[ch];
+
+  // Destroy existing chart
+  if (deepDiveChartInst) {
+    deepDiveChartInst.destroy();
+    deepDiveChartInst = null;
+  }
+
+  // ROAS point colors
+  const roasPointColors = roasData.map(v => roasColor(v));
+
+  const ctx = document.getElementById('deepDiveChart').getContext('2d');
+  deepDiveChartInst = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: WEEKS,
+      datasets: [
+        {
+          type: 'bar',
+          label: name + ' Spend ($K)',
+          data: spendData,
+          backgroundColor: color + 'b3', // ~70% opacity
+          borderColor: color,
+          borderWidth: 1,
+          yAxisID: 'ySpend',
+          order: 4,
+        },
+        {
+          type: 'line',
+          label: 'CVR %',
+          data: cvrData,
+          borderColor: color,
+          backgroundColor: 'transparent',
+          borderWidth: 2.5,
+          pointRadius: 4,
+          tension: 0.3,
+          yAxisID: 'yPct',
+          order: 3,
+        },
+        {
+          type: 'line',
+          label: 'Lvl>20 %',
+          data: lvlData,
+          borderColor: color,
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          borderDash: [6, 3],
+          pointRadius: 3,
+          tension: 0.3,
+          yAxisID: 'yPct',
+          order: 2,
+        },
+        {
+          type: 'line',
+          label: 'ROAS %',
+          data: roasData,
+          borderColor: '#e0e0e0',
+          backgroundColor: 'transparent',
+          borderWidth: 3,
+          borderDash: [3, 2],
+          pointRadius: 6,
+          pointBackgroundColor: roasPointColors,
+          pointBorderColor: '#e0e0e0',
+          pointBorderWidth: 1.5,
+          tension: 0.3,
+          yAxisID: 'yPct',
+          order: 1,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 600 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: { color: '#aaa', font: { size: 11 }, boxWidth: 12, padding: 14 }
+        },
+        tooltip: {
+          backgroundColor: '#1a1a1a',
+          borderColor: '#2a2a2a',
+          borderWidth: 1,
+          titleColor: '#e0e0e0',
+          bodyColor: '#aaa',
+          padding: 10,
+          callbacks: {
+            label: (item) => {
+              const v = item.raw;
+              if (item.datasetIndex === 0) return ' Spend: $' + v.toFixed(1) + 'K';
+              return ' ' + item.dataset.label + ': ' + v.toFixed(1) + '%';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#666', font: { size: 11 } },
+          grid: { color: '#1e1e1e' },
+        },
+        ySpend: {
+          type: 'linear',
+          position: 'left',
+          title: { display: true, text: 'Spend ($K)', color: '#666', font: { size: 11 } },
+          ticks: { color: '#666', font: { size: 11 }, callback: v => '$' + v + 'K' },
+          grid: { color: '#222' },
+        },
+        yPct: {
+          type: 'linear',
+          position: 'right',
+          title: { display: true, text: '% Rate', color: '#666', font: { size: 11 } },
+          ticks: { color: '#666', font: { size: 11 }, callback: v => v + '%' },
+          grid: { drawOnChartArea: false },
+        }
+      }
+    }
+  });
+
+  // Build mini ROAS table
+  buildRoasMiniTable(roasData, name + (cat !== 'Overall' ? ' / ' + cat : ''));
+}
+
+function buildRoasMiniTable(roasData, label) {
+  const container = document.getElementById('roasMiniTable');
+  let html = '<div style="font-size:0.78rem;color:#666;margin-bottom:6px;">ROAS % by week &mdash; ' + label + '</div>';
+  html += '<table><thead><tr><th style="text-align:left;">Metric</th>';
+  WEEKS.forEach(w => { html += '<th>' + w + '</th>'; });
+  html += '</tr></thead><tbody><tr><td style="text-align:left;color:#888;">ROAS %</td>';
+  roasData.forEach(v => {
+    const c = roasColor(v);
+    html += '<td style="color:' + c + ';font-weight:600;font-family:\'JetBrains Mono\',monospace;">' + v.toFixed(1) + '%</td>';
+  });
+  html += '</tr></tbody></table>';
+  container.innerHTML = html;
+}
+
+// ============================================================
+// PANEL IV: SITE TABLE
+// ============================================================
+function renderSiteTable(ch) {
+  const container = document.getElementById('siteTableContainer');
+  container.innerHTML = '';
+
+  if (ch === 'freecash') {
+    container.innerHTML = '<p style="color:#888;padding:12px 0;">Single sub-source; no siteid breakdown available.</p>';
     return;
   }
-  const heads = ['SiteID','L4W Logins','L4W CVR%','W5-8 CVR%','Δ CVR','L4W Lvl>20%','L4W ROAS%','W5-8 ROAS%','Δ ROAS','Action'];
-  let html = `<div class="tbl-wrap"><table><thead><tr>${heads.map((h,i)=>`<th>${h}</th>`).join('')}</tr></thead><tbody>`;
-  rows.forEach(r=>{
-    const dCvr = r.w58_cvr!=null?(r.l4w_cvr-r.w58_cvr):null;
-    const dRoas= r.w58_roas!=null?(r.l4w_roas-r.w58_roas):null;
-    html += `<tr>
-      <td class="mono">${r.id}${r.note?` <span style="color:#666;font-size:10px">(${r.note})</span>`:''}</td>
-      <td>${r.l4w_logins.toLocaleString()}</td>
-      <td>${r.l4w_cvr.toFixed(1)}</td>
-      <td>${r.w58_cvr!=null?r.w58_cvr.toFixed(1):'—'}</td>
-      <td class="${dCvr!=null?deltaClass(dCvr):''}">${dCvr!=null?sign(dCvr)+dCvr.toFixed(1):'—'}</td>
-      <td>${r.l4w_lvl.toFixed(1)}</td>
-      <td class="${roasClass(r.l4w_roas)}">${r.l4w_roas.toFixed(1)}</td>
-      <td class="${r.w58_roas!=null?roasClass(r.w58_roas):''}">${r.w58_roas!=null?r.w58_roas.toFixed(1):'—'}</td>
-      <td class="${dRoas!=null?deltaClass(dRoas):''}">${dRoas!=null?sign(dRoas)+dRoas.toFixed(1):'—'}</td>
-      <td>${actionTag(r.action)}</td>
-    </tr>`;
+  if (ch === 'kashkick') {
+    container.innerHTML = '<p style="color:#888;padding:12px 0;">Volume too small for reliable siteid-level analysis (&lt;200 logins/siteid).</p>';
+    return;
+  }
+
+  const rows = SITEIDS[ch] || [];
+  let html = '<table>';
+  html += '<thead><tr>';
+  html += '<th style="text-align:left;">SiteID</th>';
+  html += '<th>L4W Logins</th>';
+  html += '<th>L4W CVR</th>';
+  html += '<th>L4W Lvl&gt;20</th>';
+  html += '<th>L4W ROAS</th>';
+  html += '<th>W1-W4 CVR</th>';
+  html += '<th>W1-W4 Lvl&gt;20</th>';
+  html += '<th>W1-W4 ROAS</th>';
+  html += '<th>&Delta; CVR</th>';
+  html += '<th>&Delta; ROAS</th>';
+  html += '<th>Action</th>';
+  html += '</tr></thead><tbody>';
+
+  rows.forEach(r => {
+    const deltaCVR  = (r.cvr_w58  != null) ? (r.cvr_l4w  - r.cvr_w58)  : null;
+    const deltaROAS = (r.roas_w58 != null) ? (r.roas_l4w - r.roas_w58) : null;
+    html += '<tr>';
+    html += '<td style="text-align:left;font-family:\'JetBrains Mono\',monospace;font-size:0.8rem;">' + r.id + '</td>';
+    html += '<td>' + r.logins_l4w.toLocaleString() + '</td>';
+    html += '<td style="color:' + roasColor(r.cvr_l4w) + ';">' + fmtPct(r.cvr_l4w) + '</td>';
+    html += '<td>' + fmtPct(r.lvl_l4w) + '</td>';
+    html += '<td style="color:' + roasColor(r.roas_l4w) + ';font-weight:600;">' + fmtPct(r.roas_l4w) + '</td>';
+    html += '<td>' + (r.cvr_w58  != null ? fmtPct(r.cvr_w58)  : '<span style="color:#555;">N/A</span>') + '</td>';
+    html += '<td>' + (r.lvl_w58  != null ? fmtPct(r.lvl_w58)  : '<span style="color:#555;">N/A</span>') + '</td>';
+    html += '<td>' + (r.roas_w58 != null ? fmtPct(r.roas_w58) : '<span style="color:#555;">N/A</span>') + '</td>';
+    html += '<td>' + fmtDelta(deltaCVR, '%') + '</td>';
+    html += '<td>' + fmtDelta(deltaROAS, '%') + '</td>';
+    html += '<td>' + badgeHtml(r.status) + '</td>';
+    html += '</tr>';
   });
-  html += '</tbody></table></div>';
-  wrap.innerHTML = html;
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+
+  // InboxDollars annotation
+  if (ch === 'inboxdollars') {
+    container.innerHTML += '<div class="amber-box"><strong>&#9888; InboxDollars Source Note</strong>vc-001, vc-002, vc-003 are post-Mar 23, 2026 sub-sources (no historical W1-W4 baseline). Prodege is a pre-Mar23 legacy source shown for historical context only &mdash; budget has been fully migrated to vc-* siteids.</div>';
+  }
 }
-updateSiteid();
 
-// --- PANEL V: Summary Tables ---
-(function(){
-  const channels = ['inboxdollars','myappfree','freecash','adaction','kashkick'];
-  const tbody = document.getElementById('summaryTbody');
-  channels.forEach(ch=>{
-    const spend_l4w = avgN(DATA.spend[ch],4,8).toFixed(1);
-    const spend_w58 = avgN(DATA.spend[ch],0,4).toFixed(1);
-    const cvr_l4w = avgN(DATA.cvr[ch],4,8).toFixed(1);
-    const cvr_w58 = avgN(DATA.cvr[ch],0,4).toFixed(1);
-    const dCvr = (parseFloat(cvr_l4w)-parseFloat(cvr_w58)).toFixed(1);
-    const lvl_l4w = avgN(DATA.lvl[ch],4,8).toFixed(1);
-    const lvl_w58 = avgN(DATA.lvl[ch],0,4).toFixed(1);
-    const roas_l4w= avgN(DATA.roas[ch],4,8).toFixed(1);
-    const roas_w58= avgN(DATA.roas[ch],0,4).toFixed(1);
-    const dRoas = (parseFloat(roas_l4w)-parseFloat(roas_w58)).toFixed(1);
-    const rating = roasRating(parseFloat(roas_l4w));
-    tbody.innerHTML += `<tr>
-      <td style="color:${CH_COLOR[ch]};font-weight:600">${CH_LABEL[ch]}</td>
-      <td>${spend_l4w}</td><td>${spend_w58}</td>
-      <td>${cvr_l4w}</td><td>${cvr_w58}</td>
-      <td class="${deltaClass(dCvr)}">${sign(dCvr)}${dCvr}</td>
-      <td>${lvl_l4w}</td><td>${lvl_w58}</td>
-      <td class="${roasClass(parseFloat(roas_l4w))}">${roas_l4w}</td>
-      <td class="${roasClass(parseFloat(roas_w58))}">${roas_w58}</td>
-      <td class="${deltaClass(dRoas)}">${sign(dRoas)}${dRoas}</td>
-      <td style="font-size:12px">${rating}</td>
-    </tr>`;
+// ============================================================
+// PANEL V: SUMMARY TABLES
+// ============================================================
+function buildPeriodTable() {
+  const container = document.getElementById('periodTableWrap');
+  let html = '<table><thead><tr>';
+  html += '<th style="text-align:left;">Channel</th>';
+  html += '<th>W1-4 Spend</th><th>W5-8 Spend</th>';
+  html += '<th>W1-4 CVR</th><th>W5-8 CVR</th><th>&Delta;CVR</th>';
+  html += '<th>W1-4 Lvl</th><th>W5-8 Lvl</th>';
+  html += '<th>W1-4 ROAS</th><th>W5-8 ROAS</th>';
+  html += '<th>Rating</th>';
+  html += '</tr></thead><tbody>';
+
+  CHANNEL_ORDER.forEach(ch => {
+    const sp14 = avg(SPEND[ch], 0, 4);
+    const sp58 = avg(SPEND[ch], 4, 8);
+    const cv14 = avg(CVR[ch], 0, 4);
+    const cv58 = avg(CVR[ch], 4, 8);
+    const lv14 = avg(LVL[ch], 0, 4);
+    const lv58 = avg(LVL[ch], 4, 8);
+    const ro14 = avg(ROAS[ch], 0, 4);
+    const ro58 = avg(ROAS[ch], 4, 8);
+    const dCVR = cv58 - cv14;
+
+    html += '<tr>';
+    html += '<td style="text-align:left;font-weight:600;color:' + COLORS[ch] + ';">' + CHANNEL_NAMES[ch] + '</td>';
+    html += '<td>$' + fmt1(sp14) + 'K</td><td>$' + fmt1(sp58) + 'K</td>';
+    html += '<td>' + fmtPct(cv14) + '</td><td>' + fmtPct(cv58) + '</td>';
+    html += '<td>' + fmtDelta(dCVR, '%') + '</td>';
+    html += '<td>' + fmtPct(lv14) + '</td><td>' + fmtPct(lv58) + '</td>';
+    html += '<td>' + fmtPct(ro14) + '</td><td>' + fmtPct(ro58) + '</td>';
+    html += '<td><span class="' + roasClass(ro58) + '">' + roasLabel(ro58) + '</span></td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function buildWoWTable() {
+  const container = document.getElementById('wowTableWrap');
+  let html = '<table><thead><tr>';
+  html += '<th style="text-align:left;">Channel</th>';
+  html += '<th>W7 Spend</th><th>W8 Spend</th><th>WoW Spend</th>';
+  html += '<th>W7 CVR</th><th>W8 CVR</th><th>WoW CVR</th>';
+  html += '<th>W7 ROAS</th><th>W8 ROAS</th><th>WoW ROAS</th>';
+  html += '<th>Signal</th>';
+  html += '</tr></thead><tbody>';
+
+  CHANNEL_ORDER.forEach(ch => {
+    const sp7 = SPEND[ch][6], sp8 = SPEND[ch][7];
+    const cv7 = CVR[ch][6],   cv8 = CVR[ch][7];
+    const ro7 = ROAS[ch][6],  ro8 = ROAS[ch][7];
+    const dSp = sp8 - sp7;
+    const dCv = cv8 - cv7;
+    const dRo = ro8 - ro7;
+
+    let signal;
+    if (Math.abs(dCv) < 0.5) signal = '<span style="color:#888;">&#8594; FLAT</span>';
+    else if (dCv > 0) signal = '<span class="delta-pos">&#8679; UP</span>';
+    else signal = '<span class="delta-neg">&#8681; DOWN</span>';
+
+    html += '<tr>';
+    html += '<td style="text-align:left;font-weight:600;color:' + COLORS[ch] + ';">' + CHANNEL_NAMES[ch] + '</td>';
+    html += '<td>$' + fmt1(sp7) + 'K</td><td>$' + fmt1(sp8) + 'K</td>';
+    html += '<td>' + fmtDelta(dSp, 'K') + '</td>';
+    html += '<td>' + fmtPct(cv7) + '</td><td>' + fmtPct(cv8) + '</td>';
+    html += '<td>' + fmtDelta(dCv, '%') + '</td>';
+    html += '<td>' + fmtPct(ro7) + '</td><td>' + fmtPct(ro8) + '</td>';
+    html += '<td>' + fmtDelta(dRo, '%') + '</td>';
+    html += '<td>' + signal + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+// ============================================================
+// DOWNLOAD CSV
+// ============================================================
+function downloadCSV() {
+  const headers = ['Channel','W1-4 Spend ($K)','W5-8 Spend ($K)','W1-4 CVR %','W5-8 CVR %','Delta CVR %','W1-4 Lvl>20 %','W5-8 Lvl>20 %','W1-4 ROAS %','W5-8 ROAS %','ROAS Rating'];
+  const rows = [headers.join(',')];
+
+  CHANNEL_ORDER.forEach(ch => {
+    const sp14 = avg(SPEND[ch], 0, 4);
+    const sp58 = avg(SPEND[ch], 4, 8);
+    const cv14 = avg(CVR[ch], 0, 4);
+    const cv58 = avg(CVR[ch], 4, 8);
+    const lv14 = avg(LVL[ch], 0, 4);
+    const lv58 = avg(LVL[ch], 4, 8);
+    const ro14 = avg(ROAS[ch], 0, 4);
+    const ro58 = avg(ROAS[ch], 4, 8);
+    const dCVR = cv58 - cv14;
+    const rating = roasLabel(ro58);
+    rows.push([
+      CHANNEL_NAMES[ch],
+      sp14.toFixed(1), sp58.toFixed(1),
+      cv14.toFixed(1), cv58.toFixed(1), dCVR.toFixed(1),
+      lv14.toFixed(1), lv58.toFixed(1),
+      ro14.toFixed(1), ro58.toFixed(1),
+      rating
+    ].join(','));
   });
 
-  const wowTbody = document.getElementById('wowTbody');
-  const SIGNALS = {
-    inboxdollars:'🔴 Continued decline',
-    myappfree:'🟡 Minor softening',
-    freecash:'🔴 Chronically weak',
-    adaction:'🟠 Notable dip — investigate',
-    kashkick:'🟡 Minor softening'
-  };
-  channels.forEach(ch=>{
-    const w8sp = DATA.spend[ch][7], w7sp = DATA.spend[ch][6];
-    const dSp = ((w8sp-w7sp)/w7sp*100).toFixed(1);
-    const w8c = DATA.cvr[ch][7], w7c = DATA.cvr[ch][6];
-    const dC = (w8c-w7c).toFixed(1);
-    const w8r = DATA.roas[ch][7], w7r = DATA.roas[ch][6];
-    const dR = (w8r-w7r).toFixed(1);
-    wowTbody.innerHTML += `<tr>
-      <td style="color:${CH_COLOR[ch]};font-weight:600">${CH_LABEL[ch]}</td>
-      <td>${w8sp.toFixed(1)}</td><td>${w7sp.toFixed(1)}</td>
-      <td class="${deltaClass(parseFloat(dSp))}">${sign(dSp)}${dSp}%</td>
-      <td>${w8c.toFixed(1)}</td><td>${w7c.toFixed(1)}</td>
-      <td class="${deltaClass(parseFloat(dC))}">${sign(dC)}${dC}</td>
-      <td class="${roasClass(w8r)}">${w8r.toFixed(1)}</td>
-      <td class="${roasClass(w7r)}">${w7r.toFixed(1)}</td>
-      <td class="${deltaClass(parseFloat(dR))}">${sign(dR)}${dR}</td>
-      <td style="font-size:12px">${SIGNALS[ch]}</td>
-    </tr>`;
+  // Also add WoW section
+  rows.push('');
+  rows.push(['WoW Comparison','W7 Spend','W8 Spend','Delta Spend','W7 CVR','W8 CVR','Delta CVR','W7 ROAS','W8 ROAS','Delta ROAS','Signal'].join(','));
+  CHANNEL_ORDER.forEach(ch => {
+    const sp7 = SPEND[ch][6], sp8 = SPEND[ch][7];
+    const cv7 = CVR[ch][6],   cv8 = CVR[ch][7];
+    const ro7 = ROAS[ch][6],  ro8 = ROAS[ch][7];
+    const dCv = cv8 - cv7;
+    let signal = Math.abs(dCv) < 0.5 ? 'FLAT' : (dCv > 0 ? 'UP' : 'DOWN');
+    rows.push([
+      CHANNEL_NAMES[ch],
+      sp7.toFixed(1), sp8.toFixed(1), (sp8-sp7).toFixed(1),
+      cv7.toFixed(1), cv8.toFixed(1), dCv.toFixed(1),
+      ro7.toFixed(1), ro8.toFixed(1), (ro8-ro7).toFixed(1),
+      signal
+    ].join(','));
   });
-})();
 
-// --- CSV Download ---
-function downloadCSV(){
-  const channels = ['inboxdollars','myappfree','freecash','adaction','kashkick'];
-  let rows = [['Channel','Week','Spend_K','CVR_pct','Lvl20_pct','ROAS_pct']];
-  channels.forEach(ch=>{
-    WEEKS.forEach((wk,i)=>{
-      rows.push([CH_LABEL[ch],wk,DATA.spend[ch][i],DATA.cvr[ch][i],DATA.lvl[ch][i],DATA.roas[ch][i]]);
-    });
-  });
-  const csv = rows.map(r=>r.join(',')).join('\n');
-  const blob = new Blob([csv],{type:'text/csv'});
+  const csv = rows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'mpl_incent_deepdive_2026-06-23.csv';
+  a.href = url;
+  a.download = 'mpl_incent_summary_' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('DOMContentLoaded', () => {
+  buildSpendChart();
+  buildLineChart('cvrChart', CVR, 'D7 Dep CVR %');
+  buildLineChart('lvlChart', LVL, 'D7 Lvl>20 %');
+  buildDeepDiveChart();
+  renderSiteTable('adaction');
+  buildPeriodTable();
+  buildWoWTable();
+});
 </script>
 </body>
 </html>
