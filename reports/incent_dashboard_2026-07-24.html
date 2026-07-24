@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Incent Partner Deep Dive — 2026-07-24</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --bg:#fcfcfb; --surface:#ffffff; --surface2:#f4f3f1; --ink:#1c1b1a; --ink2:#55534e; --muted:#8a8781;
+  --rule:#e4e1da; --rule2:#d3cfc6;
+  --inbox:#D64545; --myapp:#E8A33D; --adaction:#5B7FDB; --freecash:#4AAB7E; --kashkick:#9B59B6;
+  --plat:#787569;
+  --good:#2f8f5b; --warn:#b8860b; --bad:#c8392a;
+  --good-bg:#e6f4ec; --warn-bg:#fbf1da; --bad-bg:#fbe7e3;
+  --mono:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --serif:'Fraunces', Georgia, 'Times New Roman', serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#171614; --surface:#201f1c; --surface2:#28261f; --ink:#f2f0ea; --ink2:#c9c5ba; --muted:#8f8b81;
+    --rule:#3a372f; --rule2:#4a463b;
+    --good:#5cc78c; --warn:#e0b64a; --bad:#f0796a;
+    --good-bg:#1c2c22; --warn-bg:#332c17; --bad-bg:#33201c; }
+}
+:root[data-theme="dark"]{ --bg:#171614; --surface:#201f1c; --surface2:#28261f; --ink:#f2f0ea; --ink2:#c9c5ba; --muted:#8f8b81;
+    --rule:#3a372f; --rule2:#4a463b; --good:#5cc78c; --warn:#e0b64a; --bad:#f0796a;
+    --good-bg:#1c2c22; --warn-bg:#332c17; --bad-bg:#33201c; }
+:root[data-theme="light"]{ --bg:#fcfcfb; --surface:#ffffff; --surface2:#f4f3f1; --ink:#1c1b1a; --ink2:#55534e; --muted:#8a8781;
+    --rule:#e4e1da; --rule2:#d3cfc6; --good:#2f8f5b; --warn:#b8860b; --bad:#c8392a;
+    --good-bg:#e6f4ec; --warn-bg:#fbf1da; --bad-bg:#fbe7e3; }
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;line-height:1.5;}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 22px 60px;}
+h1{font-family:var(--serif);font-weight:600;font-size:28px;margin:0 0 4px;letter-spacing:-0.01em;}
+h2{font-family:var(--serif);font-weight:600;font-size:19px;margin:0 0 12px;padding-top:2px;border-top:2px solid var(--ink);padding-top:10px;}
+h3{font-family:var(--serif);font-weight:600;font-size:15px;margin:0 0 8px;}
+.subtitle{color:var(--ink2);font-size:13px;margin:0 0 18px;}
+.meta{color:var(--muted);font-size:11.5px;margin-bottom:22px;}
+.notes{border:1px solid var(--rule2);background:var(--surface2);border-radius:6px;padding:12px 16px;margin-bottom:26px;font-size:12px;color:var(--ink2);}
+.notes b{color:var(--ink);}
+.notes ul{margin:6px 0 0;padding-left:18px;}
+section{margin-bottom:38px;}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-bottom:18px;}
+.card{border:1px solid var(--rule2);border-radius:8px;padding:14px 16px;background:var(--surface);}
+.card .ch{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.dot{width:10px;height:10px;border-radius:50%;flex:none;}
+.card .chname{font-family:var(--serif);font-weight:600;font-size:15px;}
+.card .badge{margin-left:auto;font-size:10.5px;padding:2px 8px;border-radius:20px;font-weight:600;letter-spacing:.02em;}
+.badge.scaleup{background:var(--good-bg);color:var(--good);}
+.badge.scaledown{background:var(--bad-bg);color:var(--bad);}
+.badge.hold{background:var(--warn-bg);color:var(--warn);}
+.badge.watch{background:var(--warn-bg);color:var(--warn);}
+.card .row{display:flex;justify-content:space-between;font-size:12px;color:var(--ink2);padding:2px 0;}
+.card .row b{color:var(--ink);font-weight:600;}
+.card .delta{font-size:11px;}
+.up{color:var(--good);} .down{color:var(--bad);} .flat{color:var(--muted);}
+table{border-collapse:collapse;width:100%;font-size:12px;}
+th,td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--rule);white-space:nowrap;}
+th:first-child,td:first-child{text-align:left;}
+th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;border-bottom:2px solid var(--ink);}
+.tblwrap{overflow-x:auto;border:1px solid var(--rule);border-radius:6px;}
+.cell-good{background:var(--good-bg);color:var(--good);font-weight:600;border-radius:3px;}
+.cell-warn{background:var(--warn-bg);color:var(--warn);font-weight:600;border-radius:3px;}
+.cell-bad{background:var(--bad-bg);color:var(--bad);font-weight:600;border-radius:3px;}
+.chartbox{border:1px solid var(--rule2);border-radius:8px;background:var(--surface);padding:14px 16px 8px;}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin:0 0 8px;font-size:11.5px;color:var(--ink2);}
+.legend span{display:inline-flex;align-items:center;gap:5px;}
+.legend i{width:11px;height:11px;border-radius:2px;display:inline-block;}
+.legend i.line{width:14px;height:3px;border-radius:2px;}
+.legend i.dash{width:14px;height:0;border-top:3px dashed currentColor;background:none;}
+svg{width:100%;height:auto;display:block;font-family:var(--mono);}
+.axis text{fill:var(--muted);font-size:10px;}
+.gridline{stroke:var(--rule);stroke-width:1;}
+.tooltip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:11px;padding:6px 9px;border-radius:5px;line-height:1.45;transform:translate(-50%,-110%);white-space:nowrap;opacity:0;transition:opacity .08s;z-index:5;}
+.chartwrap{position:relative;}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px;}
+.chip{border:1px solid var(--rule2);background:var(--surface);color:var(--ink2);padding:5px 13px;border-radius:20px;cursor:pointer;font-family:var(--mono);font-size:12px;font-weight:600;transition:all .1s;}
+.chip.active{color:#fff;border-color:transparent;}
+select{border:1px solid var(--rule2);background:var(--surface);color:var(--ink);padding:5px 10px;border-radius:6px;font-family:var(--mono);font-size:12px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media (max-width:760px){.grid2{grid-template-columns:1fr;}}
+.small{font-size:11px;color:var(--muted);}
+.verdict-scaleup{color:var(--good);font-weight:600;}
+.verdict-scaledown{color:var(--bad);font-weight:600;}
+.verdict-hold{color:var(--warn);font-weight:600;}
+.verdict-cut{color:var(--bad);font-weight:700;}
+.foot{margin-top:40px;padding-top:16px;border-top:1px solid var(--rule);color:var(--muted);font-size:11px;}
+.pill{display:inline-block;padding:1px 7px;border-radius:4px;font-size:10.5px;font-weight:600;}
+.pill.new{background:var(--warn-bg);color:var(--warn);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Incent Partner Deep Dive</h1>
+<p class="subtitle">US incent channels — spend, D7 depositor conversion, D7 Level 21+ progression, D7 ROAS. Weekly cohorts, Monday-start weeks.</p>
+<p class="meta">Generated 2026-07-24 · Data through week of 2026-07-20 (partial) · D7-matured window ends 2026-07-12</p>
+
+<div class="notes">
+<b>Reading this report</b>
+<ul>
+<li><b>Matured weeks:</b> a login week is D7-matured only once 8 days have fully elapsed. As of 2026-07-24, the latest matured week is <b>Jul 6–12</b>; <b>Jul 13–19</b> and <b>Jul 20–26</b> are shown on charts for volume context only and excluded from all comparison stats.</li>
+<li><b>Last 4 (matured):</b> Jun 15 – Jul 12. <b>Prior 5–8 weeks:</b> May 18 – Jun 8. <b>Latest matured week:</b> Jul 6–12 vs <b>previous week:</b> Jun 29–Jul 5.</li>
+<li><b>InboxDollars sub-source reporting change (2026-03-23):</b> siteid <code>Prodege</code> was replaced by <code>vc-*</code> codes. This is a provider reporting change, not an acquisition event — pre/post siteid comparisons for InboxDollars are not meaningful.</li>
+<li><b>KashKick:</b> zero spend and zero logins across the entire Apr 20 – Jul 24 window — the channel is currently inactive. Excluded from charts below; flagged for cleanup (paused campaign lingering in configs) or reactivation decision.</li>
+<li>Dep CVR denominator = all logins (no Player filter). Lvl&gt;20% denominator = Player-type logins only. ROAS = D7 CM1 / spend, shown as "—" when spend is zero. Colors: ROAS ≥30% green, 10–30% neutral, &lt;10% red.</li>
+</ul>
+</div>
+
+<section>
+<h2>Executive summary — channel scorecards</h2>
+<div class="cards" id="scorecards"></div>
+</section>
+
+<section>
+<h2>Last 4 matured weeks vs prior 5–8 weeks</h2>
+<div class="tblwrap"><table id="tbl-4v8"></table></div>
+</section>
+
+<section>
+<h2>Latest matured week (Jul 6–12) vs previous week (Jun 29–Jul 5)</h2>
+<div class="tblwrap"><table id="tbl-wow"></table></div>
+</section>
+
+<section>
+<h2>Panel I — Weekly spend by channel</h2>
+<div class="chartbox">
+<div class="legend" id="legend-spend"></div>
+<div class="chartwrap" id="chart-spend"></div>
+<p class="small">Bars for Jul 13 and Jul 20 are hatched — D7 not yet matured for those cohorts.</p>
+</div>
+</section>
+
+<section>
+<h2>Panel II — D7 Dep CVR and D7 Level 21+ % by channel</h2>
+<div class="grid2">
+<div class="chartbox"><h3>D7 Depositor Conversion Rate</h3><div class="legend" id="legend-depcvr"></div><div class="chartwrap" id="chart-depcvr"></div></div>
+<div class="chartbox"><h3>D7 Level 21+ %</h3><div class="legend" id="legend-lvl"></div><div class="chartwrap" id="chart-lvl"></div></div>
+</div>
+<p class="small">Dashed grey = platform benchmark (all channels incl. organic). FreeCash omitted from these two charts — single-digit weekly logins make its rate swing 0–100% and would distort the shared axis; see its scorecard and the comparison tables above instead.</p>
+</section>
+
+<section>
+<h2>Panel III — Channel deep dive</h2>
+<div class="chartbox">
+<div class="controls">
+  <div id="chip-channels"></div>
+  <select id="sel-category"><option value="Overall">Overall</option><option value="Bingo">Bingo</option><option value="Solitaire">Solitaire</option><option value="GinRummy">GinRummy</option></select>
+</div>
+<div class="legend" id="legend-deepdive"></div>
+<div class="chartwrap" id="chart-deepdive"></div>
+</div>
+</section>
+
+<section>
+<h2>Panel IV — SiteID drilldown</h2>
+<div class="chartbox">
+<div class="controls">
+  <select id="sel-sid-channel"><option value="inboxdollars_int">InboxDollars</option><option value="myappfre_int">MyAppFree</option><option value="adaction5_int">AdAction</option></select>
+  <select id="sel-sid-metric">
+    <option value="logins_all">Logins (all)</option>
+    <option value="dep_cvr">D7 Dep CVR %</option>
+    <option value="lvl_pct">D7 Level 21+ %</option>
+  </select>
+</div>
+<div class="legend" id="legend-sid"></div>
+<div class="chartwrap" id="chart-sid"></div>
+<p class="small">Only siteids with ≥200 logins across Apr 20 – Jul 12 shown. InboxDollars <code>Prodege</code> vs <code>vc-*</code> is a reporting-format change, not a real cohort transition.</p>
+</div>
+</section>
+
+<section>
+<h2>SiteID scale recommendations</h2>
+<p class="small">Ranked by channel share of volume. "Δ logins" = last4 vs prior5-8 matured-week volume change.</p>
+<div class="tblwrap"><table id="tbl-siteid-reco"></table></div>
+</section>
+
+<section>
+<h2>Campaigns requiring SiteID-level action</h2>
+<p class="small">Channel × campaign-category combinations where the category-level quality trend is explained by one or two specific siteids, not the channel as a whole.</p>
+<div class="tblwrap"><table id="tbl-campaign-action"></table></div>
+</section>
+
+<div class="foot">
+Methodology: mpl-incent-channel-deep-dive skill · US only · Spend: dw_silver.marketing_spends_fat · Logins/CM1: dw_gold.fact_login_channels_revenue · Levels: dw_silver.user_level_up_fat (deduped) · SiteID: dw_silver.marketing_installs_fat (latest non-null per appsflyer_id, 8-month lookback).
+</div>
+
+</div>
+<div class="tooltip" id="tooltip"></div>
+
+<script id="raw-data" type="application/json">{"channel_week":[{"week":"2026-04-20","ms":"adaction5_int","cat":"Bingo","spend":4689.0,"logins_all":292,"logins_player":245,"deps":39,"lvl20":41,"cm1":181.32,"dep_cvr":13.36,"lvl_pct":16.73,"roas":3.9},{"week":"2026-04-27","ms":"adaction5_int","cat":"Bingo","spend":9773.0,"logins_all":316,"logins_player":272,"deps":53,"lvl20":53,"cm1":154.43,"dep_cvr":16.77,"lvl_pct":19.49,"roas":1.6},{"week":"2026-05-04","ms":"adaction5_int","cat":"Bingo","spend":8124.0,"logins_all":245,"logins_player":218,"deps":56,"lvl20":58,"cm1":429.32,"dep_cvr":22.86,"lvl_pct":26.61,"roas":5.3},{"week":"2026-05-11","ms":"adaction5_int","cat":"Bingo","spend":9649.0,"logins_all":225,"logins_player":202,"deps":47,"lvl20":53,"cm1":776.9,"dep_cvr":20.89,"lvl_pct":26.24,"roas":8.1},{"week":"2026-05-18","ms":"adaction5_int","cat":"Bingo","spend":4323.0,"logins_all":144,"logins_player":121,"deps":32,"lvl20":31,"cm1":364.58,"dep_cvr":22.22,"lvl_pct":25.62,"roas":8.4},{"week":"2026-05-25","ms":"adaction5_int","cat":"Bingo","spend":4052.0,"logins_all":168,"logins_player":148,"deps":33,"lvl20":30,"cm1":71.11,"dep_cvr":19.64,"lvl_pct":20.27,"roas":1.8},{"week":"2026-06-01","ms":"adaction5_int","cat":"Bingo","spend":2741.0,"logins_all":137,"logins_player":115,"deps":25,"lvl20":23,"cm1":15.39,"dep_cvr":18.25,"lvl_pct":20.0,"roas":0.6},{"week":"2026-06-08","ms":"adaction5_int","cat":"Bingo","spend":2940.0,"logins_all":155,"logins_player":135,"deps":26,"lvl20":21,"cm1":115.11,"dep_cvr":16.77,"lvl_pct":15.56,"roas":3.9},{"week":"2026-06-15","ms":"adaction5_int","cat":"Bingo","spend":4148.0,"logins_all":235,"logins_player":201,"deps":31,"lvl20":30,"cm1":114.36,"dep_cvr":13.19,"lvl_pct":14.93,"roas":2.8},{"week":"2026-06-22","ms":"adaction5_int","cat":"Bingo","spend":2932.0,"logins_all":146,"logins_player":127,"deps":25,"lvl20":18,"cm1":213.38,"dep_cvr":17.12,"lvl_pct":14.17,"roas":7.3},{"week":"2026-06-29","ms":"adaction5_int","cat":"Bingo","spend":1974.0,"logins_all":69,"logins_player":57,"deps":16,"lvl20":16,"cm1":176.47,"dep_cvr":23.19,"lvl_pct":28.07,"roas":8.9},{"week":"2026-07-06","ms":"adaction5_int","cat":"Bingo","spend":3279.0,"logins_all":170,"logins_player":144,"deps":27,"lvl20":25,"cm1":139.53,"dep_cvr":15.88,"lvl_pct":17.36,"roas":4.3},{"week":"2026-07-13","ms":"adaction5_int","cat":"Bingo","spend":2057.0,"logins_all":186,"logins_player":158,"deps":34,"lvl20":26,"cm1":30.56,"dep_cvr":18.28,"lvl_pct":16.46,"roas":1.5},{"week":"2026-07-20","ms":"adaction5_int","cat":"Bingo","spend":1807.0,"logins_all":152,"logins_player":132,"deps":26,"lvl20":23,"cm1":0.0,"dep_cvr":17.11,"lvl_pct":17.42,"roas":0.0},{"week":"2026-04-20","ms":"adaction5_int","cat":"Solitaire","spend":10607.0,"logins_all":433,"logins_player":398,"deps":53,"lvl20":57,"cm1":429.06,"dep_cvr":12.24,"lvl_pct":14.32,"roas":4.0},{"week":"2026-04-27","ms":"adaction5_int","cat":"Solitaire","spend":11493.0,"logins_all":468,"logins_player":418,"deps":55,"lvl20":54,"cm1":226.25,"dep_cvr":11.75,"lvl_pct":12.92,"roas":2.0},{"week":"2026-05-04","ms":"adaction5_int","cat":"Solitaire","spend":12432.0,"logins_all":438,"logins_player":386,"deps":50,"lvl20":52,"cm1":98.89,"dep_cvr":11.42,"lvl_pct":13.47,"roas":0.8},{"week":"2026-05-11","ms":"adaction5_int","cat":"Solitaire","spend":11742.0,"logins_all":396,"logins_player":352,"deps":47,"lvl20":58,"cm1":408.73,"dep_cvr":11.87,"lvl_pct":16.48,"roas":3.5},{"week":"2026-05-18","ms":"adaction5_int","cat":"Solitaire","spend":9192.0,"logins_all":493,"logins_player":427,"deps":79,"lvl20":66,"cm1":-1006.27,"dep_cvr":16.02,"lvl_pct":15.46,"roas":-10.9},{"week":"2026-05-25","ms":"adaction5_int","cat":"Solitaire","spend":12485.0,"logins_all":672,"logins_player":606,"deps":108,"lvl20":100,"cm1":925.73,"dep_cvr":16.07,"lvl_pct":16.5,"roas":7.4},{"week":"2026-06-01","ms":"adaction5_int","cat":"Solitaire","spend":9867.0,"logins_all":540,"logins_player":482,"deps":89,"lvl20":77,"cm1":280.74,"dep_cvr":16.48,"lvl_pct":15.98,"roas":2.8},{"week":"2026-06-08","ms":"adaction5_int","cat":"Solitaire","spend":10339.0,"logins_all":479,"logins_player":432,"deps":92,"lvl20":78,"cm1":678.59,"dep_cvr":19.21,"lvl_pct":18.06,"roas":6.6},{"week":"2026-06-15","ms":"adaction5_int","cat":"Solitaire","spend":9933.0,"logins_all":543,"logins_player":457,"deps":95,"lvl20":72,"cm1":695.91,"dep_cvr":17.5,"lvl_pct":15.75,"roas":7.0},{"week":"2026-06-22","ms":"adaction5_int","cat":"Solitaire","spend":7694.0,"logins_all":324,"logins_player":288,"deps":47,"lvl20":44,"cm1":322.95,"dep_cvr":14.51,"lvl_pct":15.28,"roas":4.2},{"week":"2026-06-29","ms":"adaction5_int","cat":"Solitaire","spend":9270.0,"logins_all":377,"logins_player":334,"deps":59,"lvl20":49,"cm1":508.22,"dep_cvr":15.65,"lvl_pct":14.67,"roas":5.5},{"week":"2026-07-06","ms":"adaction5_int","cat":"Solitaire","spend":17469.6,"logins_all":783,"logins_player":698,"deps":105,"lvl20":99,"cm1":509.76,"dep_cvr":13.41,"lvl_pct":14.18,"roas":2.9},{"week":"2026-07-13","ms":"adaction5_int","cat":"Solitaire","spend":13534.8,"logins_all":766,"logins_player":687,"deps":95,"lvl20":84,"cm1":372.66,"dep_cvr":12.4,"lvl_pct":12.23,"roas":2.8},{"week":"2026-07-20","ms":"adaction5_int","cat":"Solitaire","spend":6339.6,"logins_all":362,"logins_player":321,"deps":41,"lvl20":27,"cm1":0.0,"dep_cvr":11.33,"lvl_pct":8.41,"roas":0.0},{"week":"2026-04-20","ms":"freecash_int","cat":"GinRummy","spend":4363.0,"logins_all":396,"logins_player":321,"deps":104,"lvl20":64,"cm1":1408.54,"dep_cvr":26.26,"lvl_pct":19.94,"roas":32.3},{"week":"2026-04-27","ms":"freecash_int","cat":"GinRummy","spend":4850.0,"logins_all":437,"logins_player":354,"deps":133,"lvl20":85,"cm1":790.91,"dep_cvr":30.43,"lvl_pct":24.01,"roas":16.3},{"week":"2026-05-04","ms":"freecash_int","cat":"GinRummy","spend":5645.0,"logins_all":485,"logins_player":383,"deps":103,"lvl20":67,"cm1":514.31,"dep_cvr":21.24,"lvl_pct":17.49,"roas":9.1},{"week":"2026-05-11","ms":"freecash_int","cat":"GinRummy","spend":2064.0,"logins_all":221,"logins_player":168,"deps":46,"lvl20":38,"cm1":785.56,"dep_cvr":20.81,"lvl_pct":22.62,"roas":38.1},{"week":"2026-05-18","ms":"freecash_int","cat":"GinRummy","spend":32.0,"logins_all":6,"logins_player":6,"deps":2,"lvl20":2,"cm1":4.68,"dep_cvr":33.33,"lvl_pct":33.33,"roas":14.6},{"week":"2026-05-25","ms":"freecash_int","cat":"GinRummy","spend":11.0,"logins_all":1,"logins_player":1,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":0.0,"lvl_pct":0.0,"roas":0.0},{"week":"2026-06-01","ms":"freecash_int","cat":"GinRummy","spend":0.0,"logins_all":4,"logins_player":3,"deps":1,"lvl20":0,"cm1":1.87,"dep_cvr":25.0,"lvl_pct":0.0,"roas":null},{"week":"2026-06-08","ms":"freecash_int","cat":"GinRummy","spend":0.0,"logins_all":1,"logins_player":1,"deps":1,"lvl20":0,"cm1":0.0,"dep_cvr":100.0,"lvl_pct":0.0,"roas":null},{"week":"2026-06-15","ms":"freecash_int","cat":"GinRummy","spend":11.0,"logins_all":0,"logins_player":0,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":null,"lvl_pct":null,"roas":null},{"week":"2026-06-22","ms":"freecash_int","cat":"GinRummy","spend":32.0,"logins_all":3,"logins_player":3,"deps":1,"lvl20":2,"cm1":5.86,"dep_cvr":33.33,"lvl_pct":66.67,"roas":18.3},{"week":"2026-06-29","ms":"freecash_int","cat":"GinRummy","spend":11.0,"logins_all":1,"logins_player":1,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":0.0,"lvl_pct":0.0,"roas":0.0},{"week":"2026-07-06","ms":"freecash_int","cat":"GinRummy","spend":21.0,"logins_all":2,"logins_player":2,"deps":1,"lvl20":2,"cm1":-0.41,"dep_cvr":50.0,"lvl_pct":100.0,"roas":-2.0},{"week":"2026-07-13","ms":"freecash_int","cat":"GinRummy","spend":32.0,"logins_all":3,"logins_player":3,"deps":0,"lvl20":2,"cm1":0.08,"dep_cvr":0.0,"lvl_pct":66.67,"roas":0.3},{"week":"2026-07-20","ms":"freecash_int","cat":"GinRummy","spend":10.0,"logins_all":1,"logins_player":0,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":0.0,"lvl_pct":null,"roas":0.0},{"week":"2026-04-20","ms":"freecash_int","cat":"Solitaire","spend":1584.0,"logins_all":141,"logins_player":128,"deps":27,"lvl20":24,"cm1":189.85,"dep_cvr":19.15,"lvl_pct":18.75,"roas":12.0},{"week":"2026-04-27","ms":"freecash_int","cat":"Solitaire","spend":902.0,"logins_all":79,"logins_player":69,"deps":15,"lvl20":11,"cm1":32.2,"dep_cvr":18.99,"lvl_pct":15.94,"roas":3.6},{"week":"2026-05-04","ms":"freecash_int","cat":"Solitaire","spend":1760.0,"logins_all":144,"logins_player":130,"deps":27,"lvl20":25,"cm1":335.3,"dep_cvr":18.75,"lvl_pct":19.23,"roas":19.1},{"week":"2026-05-11","ms":"freecash_int","cat":"Solitaire","spend":781.0,"logins_all":75,"logins_player":63,"deps":12,"lvl20":10,"cm1":24.79,"dep_cvr":16.0,"lvl_pct":15.87,"roas":3.2},{"week":"2026-05-18","ms":"freecash_int","cat":"Solitaire","spend":22.0,"logins_all":4,"logins_player":4,"deps":2,"lvl20":3,"cm1":2.12,"dep_cvr":50.0,"lvl_pct":75.0,"roas":9.6},{"week":"2026-05-25","ms":"freecash_int","cat":"Solitaire","spend":22.0,"logins_all":5,"logins_player":4,"deps":3,"lvl20":1,"cm1":15.93,"dep_cvr":60.0,"lvl_pct":25.0,"roas":72.4},{"week":"2026-06-22","ms":"freecash_int","cat":"Solitaire","spend":11.0,"logins_all":1,"logins_player":1,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":0.0,"lvl_pct":0.0,"roas":0.0},{"week":"2026-07-06","ms":"freecash_int","cat":"Solitaire","spend":11.0,"logins_all":1,"logins_player":1,"deps":0,"lvl20":1,"cm1":4.31,"dep_cvr":0.0,"lvl_pct":100.0,"roas":39.2},{"week":"2026-07-13","ms":"freecash_int","cat":"Solitaire","spend":22.0,"logins_all":2,"logins_player":1,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":0.0,"lvl_pct":0.0,"roas":0.0},{"week":"2026-04-20","ms":"inboxdollars_int","cat":"Bingo","spend":19905.0,"logins_all":1081,"logins_player":993,"deps":141,"lvl20":124,"cm1":844.93,"dep_cvr":13.04,"lvl_pct":12.49,"roas":4.2},{"week":"2026-04-27","ms":"inboxdollars_int","cat":"Bingo","spend":18127.0,"logins_all":874,"logins_player":786,"deps":149,"lvl20":122,"cm1":1114.63,"dep_cvr":17.05,"lvl_pct":15.52,"roas":6.1},{"week":"2026-05-04","ms":"inboxdollars_int","cat":"Bingo","spend":10754.0,"logins_all":813,"logins_player":735,"deps":136,"lvl20":122,"cm1":1200.23,"dep_cvr":16.73,"lvl_pct":16.6,"roas":11.2},{"week":"2026-05-11","ms":"inboxdollars_int","cat":"Bingo","spend":12504.0,"logins_all":938,"logins_player":846,"deps":157,"lvl20":144,"cm1":1178.57,"dep_cvr":16.74,"lvl_pct":17.02,"roas":9.4},{"week":"2026-05-18","ms":"inboxdollars_int","cat":"Bingo","spend":13968.0,"logins_all":1148,"logins_player":1023,"deps":165,"lvl20":144,"cm1":801.55,"dep_cvr":14.37,"lvl_pct":14.08,"roas":5.7},{"week":"2026-05-25","ms":"inboxdollars_int","cat":"Bingo","spend":16404.0,"logins_all":1352,"logins_player":1220,"deps":176,"lvl20":144,"cm1":1647.36,"dep_cvr":13.02,"lvl_pct":11.8,"roas":10.0},{"week":"2026-06-01","ms":"inboxdollars_int","cat":"Bingo","spend":20526.0,"logins_all":1740,"logins_player":1602,"deps":204,"lvl20":141,"cm1":945.49,"dep_cvr":11.72,"lvl_pct":8.8,"roas":4.6},{"week":"2026-06-08","ms":"inboxdollars_int","cat":"Bingo","spend":25414.0,"logins_all":1995,"logins_player":1826,"deps":287,"lvl20":212,"cm1":954.24,"dep_cvr":14.39,"lvl_pct":11.61,"roas":3.8},{"week":"2026-06-15","ms":"inboxdollars_int","cat":"Bingo","spend":31895.0,"logins_all":2213,"logins_player":2012,"deps":240,"lvl20":175,"cm1":966.01,"dep_cvr":10.85,"lvl_pct":8.7,"roas":3.0},{"week":"2026-06-22","ms":"inboxdollars_int","cat":"Bingo","spend":34588.0,"logins_all":2355,"logins_player":2123,"deps":302,"lvl20":235,"cm1":2633.29,"dep_cvr":12.82,"lvl_pct":11.07,"roas":7.6},{"week":"2026-06-29","ms":"inboxdollars_int","cat":"Bingo","spend":32481.0,"logins_all":2051,"logins_player":1839,"deps":273,"lvl20":212,"cm1":2606.11,"dep_cvr":13.31,"lvl_pct":11.53,"roas":8.0},{"week":"2026-07-06","ms":"inboxdollars_int","cat":"Bingo","spend":14604.0,"logins_all":798,"logins_player":723,"deps":160,"lvl20":122,"cm1":1483.18,"dep_cvr":20.05,"lvl_pct":16.87,"roas":10.2},{"week":"2026-07-13","ms":"inboxdollars_int","cat":"Bingo","spend":15663.0,"logins_all":637,"logins_player":563,"deps":139,"lvl20":108,"cm1":682.05,"dep_cvr":21.82,"lvl_pct":19.18,"roas":4.4},{"week":"2026-07-20","ms":"inboxdollars_int","cat":"Bingo","spend":7413.0,"logins_all":400,"logins_player":353,"deps":57,"lvl20":39,"cm1":0.0,"dep_cvr":14.25,"lvl_pct":11.05,"roas":0.0},{"week":"2026-05-18","ms":"inboxdollars_int","cat":"GinRummy","spend":1950.0,"logins_all":426,"logins_player":287,"deps":25,"lvl20":35,"cm1":123.51,"dep_cvr":5.87,"lvl_pct":12.2,"roas":6.3},{"week":"2026-05-25","ms":"inboxdollars_int","cat":"GinRummy","spend":6700.0,"logins_all":246,"logins_player":165,"deps":30,"lvl20":27,"cm1":63.75,"dep_cvr":12.2,"lvl_pct":16.36,"roas":1.0},{"week":"2026-06-01","ms":"inboxdollars_int","cat":"GinRummy","spend":7075.0,"logins_all":251,"logins_player":185,"deps":35,"lvl20":26,"cm1":92.64,"dep_cvr":13.94,"lvl_pct":14.05,"roas":1.3},{"week":"2026-06-08","ms":"inboxdollars_int","cat":"GinRummy","spend":7750.0,"logins_all":291,"logins_player":240,"deps":52,"lvl20":35,"cm1":159.11,"dep_cvr":17.87,"lvl_pct":14.58,"roas":2.1},{"week":"2026-06-15","ms":"inboxdollars_int","cat":"GinRummy","spend":9450.0,"logins_all":336,"logins_player":277,"deps":56,"lvl20":41,"cm1":222.29,"dep_cvr":16.67,"lvl_pct":14.8,"roas":2.4},{"week":"2026-06-22","ms":"inboxdollars_int","cat":"GinRummy","spend":18100.0,"logins_all":626,"logins_player":525,"deps":98,"lvl20":65,"cm1":1173.77,"dep_cvr":15.65,"lvl_pct":12.38,"roas":6.5},{"week":"2026-06-29","ms":"inboxdollars_int","cat":"GinRummy","spend":3200.0,"logins_all":153,"logins_player":117,"deps":16,"lvl20":11,"cm1":103.42,"dep_cvr":10.46,"lvl_pct":9.4,"roas":3.2},{"week":"2026-07-06","ms":"inboxdollars_int","cat":"GinRummy","spend":0.0,"logins_all":0,"logins_player":0,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":null,"lvl_pct":null,"roas":null},{"week":"2026-07-13","ms":"inboxdollars_int","cat":"GinRummy","spend":0.0,"logins_all":0,"logins_player":0,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":null,"lvl_pct":null,"roas":null},{"week":"2026-07-20","ms":"inboxdollars_int","cat":"GinRummy","spend":0.0,"logins_all":0,"logins_player":0,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":null,"lvl_pct":null,"roas":null},{"week":"2026-04-20","ms":"inboxdollars_int","cat":"Solitaire","spend":20847.0,"logins_all":1112,"logins_player":1017,"deps":136,"lvl20":131,"cm1":595.14,"dep_cvr":12.23,"lvl_pct":12.88,"roas":2.9},{"week":"2026-04-27","ms":"inboxdollars_int","cat":"Solitaire","spend":20443.0,"logins_all":1153,"logins_player":1022,"deps":156,"lvl20":131,"cm1":513.13,"dep_cvr":13.53,"lvl_pct":12.82,"roas":2.5},{"week":"2026-05-04","ms":"inboxdollars_int","cat":"Solitaire","spend":13296.0,"logins_all":1070,"logins_player":970,"deps":156,"lvl20":142,"cm1":931.2,"dep_cvr":14.58,"lvl_pct":14.64,"roas":7.0},{"week":"2026-05-11","ms":"inboxdollars_int","cat":"Solitaire","spend":14815.0,"logins_all":1170,"logins_player":1019,"deps":183,"lvl20":140,"cm1":1204.59,"dep_cvr":15.64,"lvl_pct":13.74,"roas":8.1},{"week":"2026-05-18","ms":"inboxdollars_int","cat":"Solitaire","spend":15911.0,"logins_all":1220,"logins_player":1083,"deps":138,"lvl20":111,"cm1":395.89,"dep_cvr":11.31,"lvl_pct":10.25,"roas":2.5},{"week":"2026-05-25","ms":"inboxdollars_int","cat":"Solitaire","spend":14775.0,"logins_all":1139,"logins_player":1010,"deps":136,"lvl20":111,"cm1":1244.47,"dep_cvr":11.94,"lvl_pct":10.99,"roas":8.4},{"week":"2026-06-01","ms":"inboxdollars_int","cat":"Solitaire","spend":15510.0,"logins_all":1263,"logins_player":1123,"deps":128,"lvl20":97,"cm1":736.05,"dep_cvr":10.13,"lvl_pct":8.64,"roas":4.7},{"week":"2026-06-08","ms":"inboxdollars_int","cat":"Solitaire","spend":19573.0,"logins_all":1355,"logins_player":1196,"deps":191,"lvl20":147,"cm1":1123.9,"dep_cvr":14.1,"lvl_pct":12.29,"roas":5.7},{"week":"2026-06-15","ms":"inboxdollars_int","cat":"Solitaire","spend":22933.0,"logins_all":1563,"logins_player":1416,"deps":179,"lvl20":129,"cm1":-113.52,"dep_cvr":11.45,"lvl_pct":9.11,"roas":-0.5},{"week":"2026-06-22","ms":"inboxdollars_int","cat":"Solitaire","spend":18102.0,"logins_all":1246,"logins_player":1121,"deps":140,"lvl20":94,"cm1":654.98,"dep_cvr":11.24,"lvl_pct":8.39,"roas":3.6},{"week":"2026-06-29","ms":"inboxdollars_int","cat":"Solitaire","spend":22858.0,"logins_all":1533,"logins_player":1385,"deps":174,"lvl20":136,"cm1":1102.18,"dep_cvr":11.35,"lvl_pct":9.82,"roas":4.8},{"week":"2026-07-06","ms":"inboxdollars_int","cat":"Solitaire","spend":7530.0,"logins_all":550,"logins_player":513,"deps":76,"lvl20":57,"cm1":200.77,"dep_cvr":13.82,"lvl_pct":11.11,"roas":2.7},{"week":"2026-07-13","ms":"inboxdollars_int","cat":"Solitaire","spend":4967.0,"logins_all":322,"logins_player":284,"deps":46,"lvl20":30,"cm1":108.32,"dep_cvr":14.29,"lvl_pct":10.56,"roas":2.2},{"week":"2026-07-20","ms":"inboxdollars_int","cat":"Solitaire","spend":2715.0,"logins_all":195,"logins_player":166,"deps":22,"lvl20":17,"cm1":0.0,"dep_cvr":11.28,"lvl_pct":10.24,"roas":0.0},{"week":"2026-04-20","ms":"myappfre_int","cat":"Bingo","spend":9123.0,"logins_all":387,"logins_player":320,"deps":97,"lvl20":73,"cm1":209.24,"dep_cvr":25.06,"lvl_pct":22.81,"roas":2.3},{"week":"2026-04-27","ms":"myappfre_int","cat":"Bingo","spend":18236.0,"logins_all":792,"logins_player":664,"deps":159,"lvl20":144,"cm1":1350.17,"dep_cvr":20.08,"lvl_pct":21.69,"roas":7.4},{"week":"2026-05-04","ms":"myappfre_int","cat":"Bingo","spend":6435.0,"logins_all":280,"logins_player":220,"deps":73,"lvl20":61,"cm1":486.33,"dep_cvr":26.07,"lvl_pct":27.73,"roas":7.6},{"week":"2026-05-11","ms":"myappfre_int","cat":"Bingo","spend":5104.0,"logins_all":265,"logins_player":213,"deps":59,"lvl20":50,"cm1":449.21,"dep_cvr":22.26,"lvl_pct":23.47,"roas":8.8},{"week":"2026-05-18","ms":"myappfre_int","cat":"Bingo","spend":5741.0,"logins_all":245,"logins_player":187,"deps":50,"lvl20":32,"cm1":340.69,"dep_cvr":20.41,"lvl_pct":17.11,"roas":5.9},{"week":"2026-05-25","ms":"myappfre_int","cat":"Bingo","spend":5894.0,"logins_all":299,"logins_player":226,"deps":56,"lvl20":41,"cm1":445.35,"dep_cvr":18.73,"lvl_pct":18.14,"roas":7.6},{"week":"2026-06-01","ms":"myappfre_int","cat":"Bingo","spend":5350.0,"logins_all":279,"logins_player":203,"deps":55,"lvl20":50,"cm1":148.89,"dep_cvr":19.71,"lvl_pct":24.63,"roas":2.8},{"week":"2026-06-08","ms":"myappfre_int","cat":"Bingo","spend":7555.0,"logins_all":291,"logins_player":229,"deps":74,"lvl20":55,"cm1":193.2,"dep_cvr":25.43,"lvl_pct":24.02,"roas":2.6},{"week":"2026-06-15","ms":"myappfre_int","cat":"Bingo","spend":7505.0,"logins_all":330,"logins_player":245,"deps":62,"lvl20":44,"cm1":372.23,"dep_cvr":18.79,"lvl_pct":17.96,"roas":5.0},{"week":"2026-06-22","ms":"myappfre_int","cat":"Bingo","spend":9823.0,"logins_all":473,"logins_player":384,"deps":82,"lvl20":61,"cm1":853.67,"dep_cvr":17.34,"lvl_pct":15.89,"roas":8.7},{"week":"2026-06-29","ms":"myappfre_int","cat":"Bingo","spend":4954.0,"logins_all":258,"logins_player":207,"deps":35,"lvl20":33,"cm1":224.58,"dep_cvr":13.57,"lvl_pct":15.94,"roas":4.5},{"week":"2026-07-06","ms":"myappfre_int","cat":"Bingo","spend":3509.0,"logins_all":217,"logins_player":180,"deps":37,"lvl20":37,"cm1":302.65,"dep_cvr":17.05,"lvl_pct":20.56,"roas":8.6},{"week":"2026-07-13","ms":"myappfre_int","cat":"Bingo","spend":10281.0,"logins_all":593,"logins_player":500,"deps":115,"lvl20":90,"cm1":125.99,"dep_cvr":19.39,"lvl_pct":18.0,"roas":1.2},{"week":"2026-07-20","ms":"myappfre_int","cat":"Bingo","spend":9107.0,"logins_all":611,"logins_player":497,"deps":98,"lvl20":71,"cm1":0.0,"dep_cvr":16.04,"lvl_pct":14.29,"roas":0.0},{"week":"2026-05-11","ms":"myappfre_int","cat":"GinRummy","spend":0.0,"logins_all":110,"logins_player":76,"deps":43,"lvl20":26,"cm1":60.37,"dep_cvr":39.09,"lvl_pct":34.21,"roas":null},{"week":"2026-05-18","ms":"myappfre_int","cat":"GinRummy","spend":0.0,"logins_all":397,"logins_player":289,"deps":122,"lvl20":72,"cm1":334.75,"dep_cvr":30.73,"lvl_pct":24.91,"roas":null},{"week":"2026-05-25","ms":"myappfre_int","cat":"GinRummy","spend":0.0,"logins_all":621,"logins_player":446,"deps":175,"lvl20":122,"cm1":833.58,"dep_cvr":28.18,"lvl_pct":27.35,"roas":null},{"week":"2026-06-01","ms":"myappfre_int","cat":"GinRummy","spend":0.0,"logins_all":633,"logins_player":457,"deps":139,"lvl20":84,"cm1":573.81,"dep_cvr":21.96,"lvl_pct":18.38,"roas":null},{"week":"2026-06-08","ms":"myappfre_int","cat":"GinRummy","spend":0.0,"logins_all":623,"logins_player":499,"deps":150,"lvl20":94,"cm1":477.97,"dep_cvr":24.08,"lvl_pct":18.84,"roas":null},{"week":"2026-06-15","ms":"myappfre_int","cat":"GinRummy","spend":0.0,"logins_all":647,"logins_player":489,"deps":126,"lvl20":80,"cm1":423.41,"dep_cvr":19.47,"lvl_pct":16.36,"roas":null},{"week":"2026-06-22","ms":"myappfre_int","cat":"GinRummy","spend":0.0,"logins_all":716,"logins_player":574,"deps":140,"lvl20":85,"cm1":331.98,"dep_cvr":19.55,"lvl_pct":14.81,"roas":null},{"week":"2026-06-29","ms":"myappfre_int","cat":"GinRummy","spend":0.0,"logins_all":602,"logins_player":463,"deps":113,"lvl20":59,"cm1":982.14,"dep_cvr":18.77,"lvl_pct":12.74,"roas":null},{"week":"2026-07-06","ms":"myappfre_int","cat":"GinRummy","spend":0.0,"logins_all":258,"logins_player":205,"deps":62,"lvl20":41,"cm1":197.51,"dep_cvr":24.03,"lvl_pct":20.0,"roas":null},{"week":"2026-04-20","ms":"myappfre_int","cat":"Solitaire","spend":34293.0,"logins_all":1454,"logins_player":1265,"deps":285,"lvl20":167,"cm1":1344.68,"dep_cvr":19.6,"lvl_pct":13.2,"roas":3.9},{"week":"2026-04-27","ms":"myappfre_int","cat":"Solitaire","spend":28727.0,"logins_all":1242,"logins_player":1037,"deps":266,"lvl20":152,"cm1":975.0,"dep_cvr":21.42,"lvl_pct":14.66,"roas":3.4},{"week":"2026-05-04","ms":"myappfre_int","cat":"Solitaire","spend":14145.0,"logins_all":636,"logins_player":538,"deps":154,"lvl20":87,"cm1":717.62,"dep_cvr":24.21,"lvl_pct":16.17,"roas":5.1},{"week":"2026-05-11","ms":"myappfre_int","cat":"Solitaire","spend":10902.0,"logins_all":468,"logins_player":395,"deps":91,"lvl20":68,"cm1":743.12,"dep_cvr":19.44,"lvl_pct":17.22,"roas":6.8},{"week":"2026-05-18","ms":"myappfre_int","cat":"Solitaire","spend":10695.0,"logins_all":438,"logins_player":367,"deps":83,"lvl20":49,"cm1":490.39,"dep_cvr":18.95,"lvl_pct":13.35,"roas":4.6},{"week":"2026-05-25","ms":"myappfre_int","cat":"Solitaire","spend":18708.0,"logins_all":673,"logins_player":577,"deps":165,"lvl20":99,"cm1":358.3,"dep_cvr":24.52,"lvl_pct":17.16,"roas":1.9},{"week":"2026-06-01","ms":"myappfre_int","cat":"Solitaire","spend":27675.0,"logins_all":951,"logins_player":807,"deps":199,"lvl20":116,"cm1":551.15,"dep_cvr":20.93,"lvl_pct":14.37,"roas":2.0},{"week":"2026-06-08","ms":"myappfre_int","cat":"Solitaire","spend":25380.0,"logins_all":872,"logins_player":724,"deps":166,"lvl20":94,"cm1":588.62,"dep_cvr":19.04,"lvl_pct":12.98,"roas":2.3},{"week":"2026-06-15","ms":"myappfre_int","cat":"Solitaire","spend":25218.0,"logins_all":844,"logins_player":712,"deps":170,"lvl20":99,"cm1":968.32,"dep_cvr":20.14,"lvl_pct":13.9,"roas":3.8},{"week":"2026-06-22","ms":"myappfre_int","cat":"Solitaire","spend":51759.0,"logins_all":1841,"logins_player":1585,"deps":267,"lvl20":167,"cm1":405.87,"dep_cvr":14.5,"lvl_pct":10.54,"roas":0.8},{"week":"2026-06-29","ms":"myappfre_int","cat":"Solitaire","spend":51300.0,"logins_all":1651,"logins_player":1429,"deps":281,"lvl20":151,"cm1":544.48,"dep_cvr":17.02,"lvl_pct":10.57,"roas":1.1},{"week":"2026-07-06","ms":"myappfre_int","cat":"Solitaire","spend":30807.0,"logins_all":1266,"logins_player":1095,"deps":211,"lvl20":122,"cm1":890.64,"dep_cvr":16.67,"lvl_pct":11.14,"roas":2.9},{"week":"2026-07-13","ms":"myappfre_int","cat":"Solitaire","spend":33143.0,"logins_all":1347,"logins_player":1134,"deps":200,"lvl20":138,"cm1":408.59,"dep_cvr":14.85,"lvl_pct":12.17,"roas":1.2},{"week":"2026-07-20","ms":"myappfre_int","cat":"Solitaire","spend":20125.0,"logins_all":978,"logins_player":827,"deps":98,"lvl20":59,"cm1":0.0,"dep_cvr":10.02,"lvl_pct":7.13,"roas":0.0}],"platform_week":[{"week":"2026-04-20","spend":207037.41,"logins_all":14556,"logins_player":12592,"deps":2451,"lvl20":2644,"cm1":26649.43,"dep_cvr":16.84,"lvl_pct":21.0,"roas":12.9},{"week":"2026-04-27","spend":219753.54,"logins_all":14919,"logins_player":12680,"deps":2831,"lvl20":3006,"cm1":29551.95,"dep_cvr":18.98,"lvl_pct":23.71,"roas":13.4},{"week":"2026-05-04","spend":200333.1,"logins_all":14182,"logins_player":11911,"deps":2586,"lvl20":2790,"cm1":20175.8,"dep_cvr":18.23,"lvl_pct":23.42,"roas":10.1},{"week":"2026-05-11","spend":216608.29,"logins_all":14784,"logins_player":12232,"deps":2521,"lvl20":2859,"cm1":20120.71,"dep_cvr":17.05,"lvl_pct":23.37,"roas":9.3},{"week":"2026-05-18","spend":217037.36,"logins_all":16106,"logins_player":13238,"deps":2530,"lvl20":2756,"cm1":26444.87,"dep_cvr":15.71,"lvl_pct":20.82,"roas":12.2},{"week":"2026-05-25","spend":239174.94,"logins_all":17934,"logins_player":14649,"deps":2910,"lvl20":2938,"cm1":27250.18,"dep_cvr":16.23,"lvl_pct":20.06,"roas":11.4},{"week":"2026-06-01","spend":262166.24,"logins_all":18943,"logins_player":15444,"deps":2941,"lvl20":2846,"cm1":15214.55,"dep_cvr":15.53,"lvl_pct":18.43,"roas":5.8},{"week":"2026-06-08","spend":269660.59,"logins_all":18150,"logins_player":15036,"deps":3039,"lvl20":2923,"cm1":18880.78,"dep_cvr":16.74,"lvl_pct":19.44,"roas":7.0},{"week":"2026-06-15","spend":279923.48,"logins_all":19153,"logins_player":15878,"deps":3153,"lvl20":3008,"cm1":21583.4,"dep_cvr":16.46,"lvl_pct":18.94,"roas":7.7},{"week":"2026-06-22","spend":312327.56,"logins_all":20483,"logins_player":16977,"deps":3236,"lvl20":2993,"cm1":27237.83,"dep_cvr":15.8,"lvl_pct":17.63,"roas":8.7},{"week":"2026-06-29","spend":243220.69,"logins_all":17879,"logins_player":14805,"deps":2995,"lvl20":2904,"cm1":22315.7,"dep_cvr":16.75,"lvl_pct":19.61,"roas":9.2},{"week":"2026-07-06","spend":153465.54,"logins_all":14256,"logins_player":11585,"deps":2337,"lvl20":2399,"cm1":10786.15,"dep_cvr":16.39,"lvl_pct":20.71,"roas":7.0},{"week":"2026-07-13","spend":123128.61,"logins_all":11351,"logins_player":9222,"deps":2029,"lvl20":2147,"cm1":12625.68,"dep_cvr":17.88,"lvl_pct":23.28,"roas":10.3},{"week":"2026-07-20","spend":65463.51,"logins_all":6723,"logins_player":5359,"deps":1024,"lvl20":1053,"cm1":0.0,"dep_cvr":15.23,"lvl_pct":19.65,"roas":0.0}],"bucket_summary":[{"ms":"adaction5_int","bucket":"last4","spend":56699.6,"logins_all":2647,"logins_player":2306,"deps":405,"lvl20":353,"cm1":2680.59,"dep_cvr":15.3,"lvl_pct":15.31,"roas":4.7},{"ms":"adaction5_int","bucket":"latest_matured","spend":20748.6,"logins_all":953,"logins_player":842,"deps":132,"lvl20":124,"cm1":649.29,"dep_cvr":13.85,"lvl_pct":14.73,"roas":3.1},{"ms":"adaction5_int","bucket":"prev_week","spend":11244.0,"logins_all":446,"logins_player":391,"deps":75,"lvl20":65,"cm1":684.7,"dep_cvr":16.82,"lvl_pct":16.62,"roas":6.1},{"ms":"adaction5_int","bucket":"prior5_8","spend":55939.0,"logins_all":2788,"logins_player":2466,"deps":484,"lvl20":426,"cm1":1444.98,"dep_cvr":17.36,"lvl_pct":17.27,"roas":2.6},{"ms":"freecash_int","bucket":"last4","spend":97.0,"logins_all":8,"logins_player":8,"deps":2,"lvl20":5,"cm1":9.76,"dep_cvr":25.0,"lvl_pct":62.5,"roas":10.1},{"ms":"freecash_int","bucket":"latest_matured","spend":32.0,"logins_all":3,"logins_player":3,"deps":1,"lvl20":3,"cm1":3.9,"dep_cvr":33.33,"lvl_pct":100.0,"roas":12.2},{"ms":"freecash_int","bucket":"prev_week","spend":11.0,"logins_all":1,"logins_player":1,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":0.0,"lvl_pct":0.0,"roas":0.0},{"ms":"freecash_int","bucket":"prior5_8","spend":87.0,"logins_all":21,"logins_player":19,"deps":9,"lvl20":6,"cm1":24.6,"dep_cvr":42.86,"lvl_pct":31.58,"roas":28.3},{"ms":"inboxdollars_int","bucket":"last4","spend":215741.0,"logins_all":13424,"logins_player":12051,"deps":1714,"lvl20":1277,"cm1":11032.47,"dep_cvr":12.77,"lvl_pct":10.6,"roas":5.1},{"ms":"inboxdollars_int","bucket":"latest_matured","spend":22134.0,"logins_all":1348,"logins_player":1236,"deps":236,"lvl20":179,"cm1":1683.94,"dep_cvr":17.51,"lvl_pct":14.48,"roas":7.6},{"ms":"inboxdollars_int","bucket":"prev_week","spend":58539.0,"logins_all":3737,"logins_player":3341,"deps":463,"lvl20":359,"cm1":3811.71,"dep_cvr":12.39,"lvl_pct":10.75,"roas":6.5},{"ms":"inboxdollars_int","bucket":"prior5_8","spend":165556.0,"logins_all":12426,"logins_player":10960,"deps":1567,"lvl20":1230,"cm1":8287.95,"dep_cvr":12.61,"lvl_pct":11.22,"roas":5.0},{"ms":"myappfre_int","bucket":"last4","spend":184875.0,"logins_all":9105,"logins_player":7570,"deps":1586,"lvl20":979,"cm1":6497.47,"dep_cvr":17.42,"lvl_pct":12.93,"roas":3.5},{"ms":"myappfre_int","bucket":"latest_matured","spend":34316.0,"logins_all":1742,"logins_player":1481,"deps":310,"lvl20":200,"cm1":1390.8,"dep_cvr":17.8,"lvl_pct":13.5,"roas":4.1},{"ms":"myappfre_int","bucket":"prev_week","spend":56254.0,"logins_all":2512,"logins_player":2100,"deps":429,"lvl20":243,"cm1":1751.2,"dep_cvr":17.08,"lvl_pct":11.57,"roas":3.1},{"ms":"myappfre_int","bucket":"prior5_8","spend":106998.0,"logins_all":6325,"logins_player":5013,"deps":1434,"lvl20":908,"cm1":5336.66,"dep_cvr":22.67,"lvl_pct":18.11,"roas":5.0},{"ms":"kashkick_int","bucket":"last4","spend":0,"logins_all":0,"logins_player":0,"deps":0,"lvl20":0,"cm1":0,"dep_cvr":null,"lvl_pct":null,"roas":null},{"ms":"kashkick_int","bucket":"prior5_8","spend":0,"logins_all":0,"logins_player":0,"deps":0,"lvl20":0,"cm1":0,"dep_cvr":null,"lvl_pct":null,"roas":null},{"ms":"kashkick_int","bucket":"latest_matured","spend":0,"logins_all":0,"logins_player":0,"deps":0,"lvl20":0,"cm1":0,"dep_cvr":null,"lvl_pct":null,"roas":null},{"ms":"kashkick_int","bucket":"prev_week","spend":0,"logins_all":0,"logins_player":0,"deps":0,"lvl20":0,"cm1":0,"dep_cvr":null,"lvl_pct":null,"roas":null}],"platform_bucket":[{"bucket":"last4","spend":988937.27,"logins_all":71771,"logins_player":59245,"deps":11721,"lvl20":11304,"cm1":81923.08,"dep_cvr":16.33,"lvl_pct":19.08,"roas":8.3},{"bucket":"latest_matured","spend":153465.54,"logins_all":14256,"logins_player":11585,"deps":2337,"lvl20":2399,"cm1":10786.15,"dep_cvr":16.39,"lvl_pct":20.71,"roas":7.0},{"bucket":"prev_week","spend":243220.69,"logins_all":17879,"logins_player":14805,"deps":2995,"lvl20":2904,"cm1":22315.7,"dep_cvr":16.75,"lvl_pct":19.61,"roas":9.2},{"bucket":"prior5_8","spend":988039.13,"logins_all":71133,"logins_player":58367,"deps":11420,"lvl20":11463,"cm1":87790.39,"dep_cvr":16.05,"lvl_pct":19.64,"roas":8.9}],"siteid_week":[{"week":"2026-04-20","ms":"adaction5_int","sid":"32981766","logins_all":16,"logins_player":15,"deps":1,"lvl20":1,"cm1":4.43,"dep_cvr":6.25,"lvl_pct":6.67},{"week":"2026-04-27","ms":"adaction5_int","sid":"32981766","logins_all":15,"logins_player":14,"deps":1,"lvl20":0,"cm1":-0.44,"dep_cvr":6.67,"lvl_pct":0.0},{"week":"2026-05-04","ms":"adaction5_int","sid":"32981766","logins_all":16,"logins_player":15,"deps":3,"lvl20":2,"cm1":7.07,"dep_cvr":18.75,"lvl_pct":13.33},{"week":"2026-05-11","ms":"adaction5_int","sid":"32981766","logins_all":21,"logins_player":21,"deps":2,"lvl20":1,"cm1":1.12,"dep_cvr":9.52,"lvl_pct":4.76},{"week":"2026-05-18","ms":"adaction5_int","sid":"32981766","logins_all":15,"logins_player":14,"deps":0,"lvl20":0,"cm1":-0.09,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-05-25","ms":"adaction5_int","sid":"32981766","logins_all":25,"logins_player":24,"deps":1,"lvl20":2,"cm1":5.16,"dep_cvr":4.0,"lvl_pct":8.33},{"week":"2026-06-01","ms":"adaction5_int","sid":"32981766","logins_all":16,"logins_player":14,"deps":0,"lvl20":0,"cm1":-0.38,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-06-08","ms":"adaction5_int","sid":"32981766","logins_all":12,"logins_player":12,"deps":0,"lvl20":0,"cm1":-0.07,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-06-15","ms":"adaction5_int","sid":"32981766","logins_all":13,"logins_player":11,"deps":0,"lvl20":0,"cm1":-2.0,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-06-22","ms":"adaction5_int","sid":"32981766","logins_all":9,"logins_player":8,"deps":0,"lvl20":0,"cm1":-0.03,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-06-29","ms":"adaction5_int","sid":"32981766","logins_all":5,"logins_player":5,"deps":0,"lvl20":0,"cm1":-0.01,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-07-06","ms":"adaction5_int","sid":"32981766","logins_all":14,"logins_player":13,"deps":0,"lvl20":0,"cm1":-0.24,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-07-13","ms":"adaction5_int","sid":"32981766","logins_all":20,"logins_player":18,"deps":0,"lvl20":0,"cm1":0.23,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-07-20","ms":"adaction5_int","sid":"32981766","logins_all":6,"logins_player":6,"deps":1,"lvl20":0,"cm1":0.0,"dep_cvr":16.67,"lvl_pct":0.0},{"week":"2026-04-20","ms":"adaction5_int","sid":"329825346","logins_all":3,"logins_player":1,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-04-27","ms":"adaction5_int","sid":"329825346","logins_all":1,"logins_player":1,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-05-04","ms":"adaction5_int","sid":"329825346","logins_all":8,"logins_player":8,"deps":2,"lvl20":4,"cm1":28.14,"dep_cvr":25.0,"lvl_pct":50.0},{"week":"2026-05-11","ms":"adaction5_int","sid":"329825346","logins_all":34,"logins_player":30,"deps":2,"lvl20":2,"cm1":2.04,"dep_cvr":5.88,"lvl_pct":6.67},{"week":"2026-05-18","ms":"adaction5_int","sid":"329825346","logins_all":80,"logins_player":68,"deps":15,"lvl20":10,"cm1":71.09,"dep_cvr":18.75,"lvl_pct":14.71},{"week":"2026-05-25","ms":"adaction5_int","sid":"329825346","logins_all":89,"logins_player":77,"deps":10,"lvl20":17,"cm1":189.38,"dep_cvr":11.24,"lvl_pct":22.08},{"week":"2026-06-01","ms":"adaction5_int","sid":"329825346","logins_all":68,"logins_player":55,"deps":10,"lvl20":11,"cm1":53.88,"dep_cvr":14.71,"lvl_pct":20.0},{"week":"2026-06-08","ms":"adaction5_int","sid":"329825346","logins_all":63,"logins_player":54,"deps":13,"lvl20":10,"cm1":8.02,"dep_cvr":20.63,"lvl_pct":18.52},{"week":"2026-06-15","ms":"adaction5_int","sid":"329825346","logins_all":90,"logins_player":68,"deps":13,"lvl20":12,"cm1":149.18,"dep_cvr":14.44,"lvl_pct":17.65},{"week":"2026-06-22","ms":"adaction5_int","sid":"329825346","logins_all":18,"logins_player":15,"deps":5,"lvl20":4,"cm1":74.87,"dep_cvr":27.78,"lvl_pct":26.67},{"week":"2026-06-29","ms":"adaction5_int","sid":"329825346","logins_all":7,"logins_player":5,"deps":1,"lvl20":0,"cm1":-2.67,"dep_cvr":14.29,"lvl_pct":0.0},{"week":"2026-07-06","ms":"adaction5_int","sid":"329825346","logins_all":14,"logins_player":11,"deps":1,"lvl20":2,"cm1":7.64,"dep_cvr":7.14,"lvl_pct":18.18},{"week":"2026-07-13","ms":"adaction5_int","sid":"329825346","logins_all":7,"logins_player":6,"deps":1,"lvl20":2,"cm1":10.74,"dep_cvr":14.29,"lvl_pct":33.33},{"week":"2026-07-20","ms":"adaction5_int","sid":"329825346","logins_all":7,"logins_player":4,"deps":2,"lvl20":1,"cm1":0.0,"dep_cvr":28.57,"lvl_pct":25.0},{"week":"2026-04-20","ms":"adaction5_int","sid":"329825370","logins_all":15,"logins_player":13,"deps":1,"lvl20":1,"cm1":-0.41,"dep_cvr":6.67,"lvl_pct":7.69},{"week":"2026-04-27","ms":"adaction5_int","sid":"329825370","logins_all":12,"logins_player":11,"deps":1,"lvl20":2,"cm1":10.95,"dep_cvr":8.33,"lvl_pct":18.18},{"week":"2026-05-04","ms":"adaction5_int","sid":"329825370","logins_all":28,"logins_player":22,"deps":6,"lvl20":7,"cm1":53.54,"dep_cvr":21.43,"lvl_pct":31.82},{"week":"2026-05-11","ms":"adaction5_int","sid":"329825370","logins_all":100,"logins_player":83,"deps":14,"lvl20":16,"cm1":499.94,"dep_cvr":14.0,"lvl_pct":19.28},{"week":"2026-05-18","ms":"adaction5_int","sid":"329825370","logins_all":233,"logins_player":203,"deps":43,"lvl20":33,"cm1":-1212.93,"dep_cvr":18.45,"lvl_pct":16.26},{"week":"2026-05-25","ms":"adaction5_int","sid":"329825370","logins_all":236,"logins_player":208,"deps":51,"lvl20":46,"cm1":289.86,"dep_cvr":21.61,"lvl_pct":22.12},{"week":"2026-06-01","ms":"adaction5_int","sid":"329825370","logins_all":159,"logins_player":136,"deps":36,"lvl20":27,"cm1":112.18,"dep_cvr":22.64,"lvl_pct":19.85},{"week":"2026-06-08","ms":"adaction5_int","sid":"329825370","logins_all":136,"logins_player":121,"deps":32,"lvl20":27,"cm1":197.76,"dep_cvr":23.53,"lvl_pct":22.31},{"week":"2026-06-15","ms":"adaction5_int","sid":"329825370","logins_all":148,"logins_player":122,"deps":25,"lvl20":19,"cm1":196.84,"dep_cvr":16.89,"lvl_pct":15.57},{"week":"2026-06-22","ms":"adaction5_int","sid":"329825370","logins_all":71,"logins_player":59,"deps":7,"lvl20":12,"cm1":61.36,"dep_cvr":9.86,"lvl_pct":20.34},{"week":"2026-06-29","ms":"adaction5_int","sid":"329825370","logins_all":35,"logins_player":27,"deps":6,"lvl20":6,"cm1":158.57,"dep_cvr":17.14,"lvl_pct":22.22},{"week":"2026-07-06","ms":"adaction5_int","sid":"329825370","logins_all":35,"logins_player":30,"deps":9,"lvl20":10,"cm1":117.45,"dep_cvr":25.71,"lvl_pct":33.33},{"week":"2026-07-13","ms":"adaction5_int","sid":"329825370","logins_all":57,"logins_player":46,"deps":10,"lvl20":10,"cm1":25.16,"dep_cvr":17.54,"lvl_pct":21.74},{"week":"2026-07-20","ms":"adaction5_int","sid":"329825370","logins_all":55,"logins_player":48,"deps":15,"lvl20":14,"cm1":0.0,"dep_cvr":27.27,"lvl_pct":29.17},{"week":"2026-04-20","ms":"adaction5_int","sid":"329825371","logins_all":4,"logins_player":4,"deps":2,"lvl20":2,"cm1":112.99,"dep_cvr":50.0,"lvl_pct":50.0},{"week":"2026-04-27","ms":"adaction5_int","sid":"329825371","logins_all":4,"logins_player":3,"deps":0,"lvl20":0,"cm1":-1.6,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-05-04","ms":"adaction5_int","sid":"329825371","logins_all":11,"logins_player":6,"deps":2,"lvl20":1,"cm1":1.15,"dep_cvr":18.18,"lvl_pct":16.67},{"week":"2026-05-11","ms":"adaction5_int","sid":"329825371","logins_all":20,"logins_player":19,"deps":4,"lvl20":3,"cm1":4.4,"dep_cvr":20.0,"lvl_pct":15.79},{"week":"2026-05-18","ms":"adaction5_int","sid":"329825371","logins_all":42,"logins_player":28,"deps":1,"lvl20":5,"cm1":5.32,"dep_cvr":2.38,"lvl_pct":17.86},{"week":"2026-05-25","ms":"adaction5_int","sid":"329825371","logins_all":47,"logins_player":35,"deps":6,"lvl20":5,"cm1":33.95,"dep_cvr":12.77,"lvl_pct":14.29},{"week":"2026-06-01","ms":"adaction5_int","sid":"329825371","logins_all":27,"logins_player":22,"deps":5,"lvl20":4,"cm1":-5.29,"dep_cvr":18.52,"lvl_pct":18.18},{"week":"2026-06-08","ms":"adaction5_int","sid":"329825371","logins_all":25,"logins_player":21,"deps":3,"lvl20":3,"cm1":0.04,"dep_cvr":12.0,"lvl_pct":14.29},{"week":"2026-06-15","ms":"adaction5_int","sid":"329825371","logins_all":40,"logins_player":28,"deps":6,"lvl20":6,"cm1":131.16,"dep_cvr":15.0,"lvl_pct":21.43},{"week":"2026-06-22","ms":"adaction5_int","sid":"329825371","logins_all":14,"logins_player":11,"deps":4,"lvl20":3,"cm1":-17.24,"dep_cvr":28.57,"lvl_pct":27.27},{"week":"2026-06-29","ms":"adaction5_int","sid":"329825371","logins_all":17,"logins_player":10,"deps":3,"lvl20":4,"cm1":13.92,"dep_cvr":17.65,"lvl_pct":40.0},{"week":"2026-07-06","ms":"adaction5_int","sid":"329825371","logins_all":13,"logins_player":10,"deps":3,"lvl20":3,"cm1":9.39,"dep_cvr":23.08,"lvl_pct":30.0},{"week":"2026-07-13","ms":"adaction5_int","sid":"329825371","logins_all":11,"logins_player":10,"deps":2,"lvl20":2,"cm1":8.06,"dep_cvr":18.18,"lvl_pct":20.0},{"week":"2026-07-20","ms":"adaction5_int","sid":"329825371","logins_all":17,"logins_player":11,"deps":1,"lvl20":1,"cm1":0.0,"dep_cvr":5.88,"lvl_pct":9.09},{"week":"2026-04-20","ms":"adaction5_int","sid":"329830184","logins_all":8,"logins_player":8,"deps":0,"lvl20":4,"cm1":-2.65,"dep_cvr":0.0,"lvl_pct":50.0},{"week":"2026-04-27","ms":"adaction5_int","sid":"329830184","logins_all":11,"logins_player":9,"deps":0,"lvl20":1,"cm1":-2.27,"dep_cvr":0.0,"lvl_pct":11.11},{"week":"2026-05-04","ms":"adaction5_int","sid":"329830184","logins_all":10,"logins_player":8,"deps":2,"lvl20":3,"cm1":10.34,"dep_cvr":20.0,"lvl_pct":37.5},{"week":"2026-05-11","ms":"adaction5_int","sid":"329830184","logins_all":6,"logins_player":4,"deps":0,"lvl20":1,"cm1":-0.66,"dep_cvr":0.0,"lvl_pct":25.0},{"week":"2026-05-18","ms":"adaction5_int","sid":"329830184","logins_all":32,"logins_player":26,"deps":2,"lvl20":4,"cm1":45.6,"dep_cvr":6.25,"lvl_pct":15.38},{"week":"2026-05-25","ms":"adaction5_int","sid":"329830184","logins_all":17,"logins_player":16,"deps":3,"lvl20":1,"cm1":11.7,"dep_cvr":17.65,"lvl_pct":6.25},{"week":"2026-06-01","ms":"adaction5_int","sid":"329830184","logins_all":13,"logins_player":12,"deps":0,"lvl20":0,"cm1":-1.45,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-06-08","ms":"adaction5_int","sid":"329830184","logins_all":42,"logins_player":39,"deps":4,"lvl20":2,"cm1":20.68,"dep_cvr":9.52,"lvl_pct":5.13},{"week":"2026-06-15","ms":"adaction5_int","sid":"329830184","logins_all":79,"logins_player":70,"deps":4,"lvl20":3,"cm1":16.14,"dep_cvr":5.06,"lvl_pct":4.29},{"week":"2026-06-22","ms":"adaction5_int","sid":"329830184","logins_all":21,"logins_player":19,"deps":5,"lvl20":3,"cm1":39.04,"dep_cvr":23.81,"lvl_pct":15.79},{"week":"2026-06-29","ms":"adaction5_int","sid":"329830184","logins_all":2,"logins_player":2,"deps":0,"lvl20":1,"cm1":-0.38,"dep_cvr":0.0,"lvl_pct":50.0},{"week":"2026-07-06","ms":"adaction5_int","sid":"329830184","logins_all":19,"logins_player":18,"deps":4,"lvl20":2,"cm1":18.28,"dep_cvr":21.05,"lvl_pct":11.11},{"week":"2026-07-13","ms":"adaction5_int","sid":"329830184","logins_all":49,"logins_player":43,"deps":9,"lvl20":5,"cm1":6.63,"dep_cvr":18.37,"lvl_pct":11.63},{"week":"2026-07-20","ms":"adaction5_int","sid":"329830184","logins_all":33,"logins_player":30,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-04-20","ms":"adaction5_int","sid":"329830666","logins_all":339,"logins_player":312,"deps":36,"lvl20":33,"cm1":368.85,"dep_cvr":10.62,"lvl_pct":10.58},{"week":"2026-04-27","ms":"adaction5_int","sid":"329830666","logins_all":439,"logins_player":403,"deps":49,"lvl20":51,"cm1":155.19,"dep_cvr":11.16,"lvl_pct":12.66},{"week":"2026-05-04","ms":"adaction5_int","sid":"329830666","logins_all":463,"logins_player":429,"deps":69,"lvl20":72,"cm1":319.21,"dep_cvr":14.9,"lvl_pct":16.78},{"week":"2026-05-11","ms":"adaction5_int","sid":"329830666","logins_all":319,"logins_player":296,"deps":47,"lvl20":62,"cm1":355.2,"dep_cvr":14.73,"lvl_pct":20.95},{"week":"2026-05-18","ms":"adaction5_int","sid":"329830666","logins_all":144,"logins_player":127,"deps":31,"lvl20":27,"cm1":186.13,"dep_cvr":21.53,"lvl_pct":21.26},{"week":"2026-05-25","ms":"adaction5_int","sid":"329830666","logins_all":335,"logins_player":320,"deps":54,"lvl20":46,"cm1":402.87,"dep_cvr":16.12,"lvl_pct":14.37},{"week":"2026-06-01","ms":"adaction5_int","sid":"329830666","logins_all":307,"logins_player":284,"deps":48,"lvl20":42,"cm1":68.08,"dep_cvr":15.64,"lvl_pct":14.79},{"week":"2026-06-08","ms":"adaction5_int","sid":"329830666","logins_all":268,"logins_player":253,"deps":53,"lvl20":49,"cm1":513.63,"dep_cvr":19.78,"lvl_pct":19.37},{"week":"2026-06-15","ms":"adaction5_int","sid":"329830666","logins_all":239,"logins_player":224,"deps":49,"lvl20":39,"cm1":255.34,"dep_cvr":20.5,"lvl_pct":17.41},{"week":"2026-06-22","ms":"adaction5_int","sid":"329830666","logins_all":229,"logins_player":213,"deps":33,"lvl20":31,"cm1":315.8,"dep_cvr":14.41,"lvl_pct":14.55},{"week":"2026-06-29","ms":"adaction5_int","sid":"329830666","logins_all":258,"logins_player":239,"deps":44,"lvl20":39,"cm1":422.87,"dep_cvr":17.05,"lvl_pct":16.32},{"week":"2026-07-06","ms":"adaction5_int","sid":"329830666","logins_all":288,"logins_player":262,"deps":51,"lvl20":44,"cm1":246.22,"dep_cvr":17.71,"lvl_pct":16.79},{"week":"2026-07-13","ms":"adaction5_int","sid":"329830666","logins_all":396,"logins_player":366,"deps":66,"lvl20":52,"cm1":310.83,"dep_cvr":16.67,"lvl_pct":14.21},{"week":"2026-07-20","ms":"adaction5_int","sid":"329830666","logins_all":187,"logins_player":171,"deps":25,"lvl20":18,"cm1":0.0,"dep_cvr":13.37,"lvl_pct":10.53},{"week":"2026-04-20","ms":"adaction5_int","sid":"329831306","logins_all":125,"logins_player":104,"deps":17,"lvl20":24,"cm1":79.52,"dep_cvr":13.6,"lvl_pct":23.08},{"week":"2026-04-27","ms":"adaction5_int","sid":"329831306","logins_all":120,"logins_player":100,"deps":28,"lvl20":24,"cm1":118.0,"dep_cvr":23.33,"lvl_pct":24.0},{"week":"2026-05-04","ms":"adaction5_int","sid":"329831306","logins_all":40,"logins_player":32,"deps":9,"lvl20":10,"cm1":39.39,"dep_cvr":22.5,"lvl_pct":31.25},{"week":"2026-05-11","ms":"adaction5_int","sid":"329831306","logins_all":26,"logins_player":24,"deps":6,"lvl20":8,"cm1":18.65,"dep_cvr":23.08,"lvl_pct":33.33},{"week":"2026-05-18","ms":"adaction5_int","sid":"329831306","logins_all":16,"logins_player":16,"deps":5,"lvl20":4,"cm1":-6.4,"dep_cvr":31.25,"lvl_pct":25.0},{"week":"2026-05-25","ms":"adaction5_int","sid":"329831306","logins_all":12,"logins_player":11,"deps":5,"lvl20":4,"cm1":20.79,"dep_cvr":41.67,"lvl_pct":36.36},{"week":"2026-06-01","ms":"adaction5_int","sid":"329831306","logins_all":7,"logins_player":6,"deps":1,"lvl20":1,"cm1":-8.07,"dep_cvr":14.29,"lvl_pct":16.67},{"week":"2026-06-08","ms":"adaction5_int","sid":"329831306","logins_all":1,"logins_player":1,"deps":0,"lvl20":0,"cm1":-0.04,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-06-15","ms":"adaction5_int","sid":"329831306","logins_all":52,"logins_player":46,"deps":14,"lvl20":11,"cm1":14.4,"dep_cvr":26.92,"lvl_pct":23.91},{"week":"2026-06-22","ms":"adaction5_int","sid":"329831306","logins_all":29,"logins_player":23,"deps":8,"lvl20":6,"cm1":60.83,"dep_cvr":27.59,"lvl_pct":26.09},{"week":"2026-06-29","ms":"adaction5_int","sid":"329831306","logins_all":4,"logins_player":4,"deps":1,"lvl20":1,"cm1":7.69,"dep_cvr":25.0,"lvl_pct":25.0},{"week":"2026-07-06","ms":"adaction5_int","sid":"329831306","logins_all":75,"logins_player":64,"deps":16,"lvl20":16,"cm1":115.87,"dep_cvr":21.33,"lvl_pct":25.0},{"week":"2026-07-13","ms":"adaction5_int","sid":"329831306","logins_all":74,"logins_player":67,"deps":12,"lvl20":10,"cm1":0.51,"dep_cvr":16.22,"lvl_pct":14.93},{"week":"2026-07-20","ms":"adaction5_int","sid":"329831306","logins_all":56,"logins_player":48,"deps":7,"lvl20":6,"cm1":0.0,"dep_cvr":12.5,"lvl_pct":12.5},{"week":"2026-06-29","ms":"adaction5_int","sid":"329831656","logins_all":32,"logins_player":26,"deps":2,"lvl20":2,"cm1":-18.94,"dep_cvr":6.25,"lvl_pct":7.69},{"week":"2026-07-06","ms":"adaction5_int","sid":"329831656","logins_all":310,"logins_player":275,"deps":26,"lvl20":23,"cm1":120.62,"dep_cvr":8.39,"lvl_pct":8.36},{"week":"2026-07-13","ms":"adaction5_int","sid":"329831656","logins_all":172,"logins_player":148,"deps":12,"lvl20":9,"cm1":20.76,"dep_cvr":6.98,"lvl_pct":6.08},{"week":"2026-07-20","ms":"adaction5_int","sid":"329831656","logins_all":56,"logins_player":53,"deps":5,"lvl20":4,"cm1":0.0,"dep_cvr":8.93,"lvl_pct":7.55},{"week":"2026-05-18","ms":"inboxdollars_int","sid":"Prodege","logins_all":351,"logins_player":231,"deps":17,"lvl20":27,"cm1":51.11,"dep_cvr":4.84,"lvl_pct":11.69},{"week":"2026-05-25","ms":"inboxdollars_int","sid":"Prodege","logins_all":1,"logins_player":0,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":0.0,"lvl_pct":null},{"week":"2026-04-20","ms":"inboxdollars_int","sid":"vc-18478","logins_all":221,"logins_player":198,"deps":9,"lvl20":8,"cm1":0.87,"dep_cvr":4.07,"lvl_pct":4.04},{"week":"2026-04-27","ms":"inboxdollars_int","sid":"vc-18478","logins_all":12,"logins_player":11,"deps":0,"lvl20":1,"cm1":-1.56,"dep_cvr":0.0,"lvl_pct":9.09},{"week":"2026-05-04","ms":"inboxdollars_int","sid":"vc-18478","logins_all":9,"logins_player":8,"deps":0,"lvl20":0,"cm1":-1.66,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-05-11","ms":"inboxdollars_int","sid":"vc-18478","logins_all":11,"logins_player":11,"deps":0,"lvl20":1,"cm1":-0.15,"dep_cvr":0.0,"lvl_pct":9.09},{"week":"2026-05-18","ms":"inboxdollars_int","sid":"vc-18478","logins_all":8,"logins_player":7,"deps":0,"lvl20":0,"cm1":-0.19,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-05-25","ms":"inboxdollars_int","sid":"vc-18478","logins_all":8,"logins_player":8,"deps":0,"lvl20":0,"cm1":-2.01,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-06-01","ms":"inboxdollars_int","sid":"vc-18478","logins_all":9,"logins_player":8,"deps":0,"lvl20":0,"cm1":-0.58,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-06-08","ms":"inboxdollars_int","sid":"vc-18478","logins_all":3,"logins_player":3,"deps":0,"lvl20":0,"cm1":-0.05,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-04-20","ms":"inboxdollars_int","sid":"vc-18936","logins_all":161,"logins_player":146,"deps":38,"lvl20":36,"cm1":314.9,"dep_cvr":23.6,"lvl_pct":24.66},{"week":"2026-04-27","ms":"inboxdollars_int","sid":"vc-18936","logins_all":137,"logins_player":118,"deps":30,"lvl20":24,"cm1":197.86,"dep_cvr":21.9,"lvl_pct":20.34},{"week":"2026-05-04","ms":"inboxdollars_int","sid":"vc-18936","logins_all":131,"logins_player":120,"deps":37,"lvl20":35,"cm1":296.03,"dep_cvr":28.24,"lvl_pct":29.17},{"week":"2026-05-11","ms":"inboxdollars_int","sid":"vc-18936","logins_all":160,"logins_player":144,"deps":51,"lvl20":38,"cm1":255.04,"dep_cvr":31.87,"lvl_pct":26.39},{"week":"2026-05-18","ms":"inboxdollars_int","sid":"vc-18936","logins_all":149,"logins_player":130,"deps":40,"lvl20":33,"cm1":259.27,"dep_cvr":26.85,"lvl_pct":25.38},{"week":"2026-05-25","ms":"inboxdollars_int","sid":"vc-18936","logins_all":230,"logins_player":192,"deps":51,"lvl20":44,"cm1":560.38,"dep_cvr":22.17,"lvl_pct":22.92},{"week":"2026-06-01","ms":"inboxdollars_int","sid":"vc-18936","logins_all":180,"logins_player":153,"deps":42,"lvl20":33,"cm1":46.89,"dep_cvr":23.33,"lvl_pct":21.57},{"week":"2026-06-08","ms":"inboxdollars_int","sid":"vc-18936","logins_all":161,"logins_player":140,"deps":40,"lvl20":33,"cm1":294.12,"dep_cvr":24.84,"lvl_pct":23.57},{"week":"2026-06-15","ms":"inboxdollars_int","sid":"vc-18936","logins_all":146,"logins_player":133,"deps":29,"lvl20":26,"cm1":-0.81,"dep_cvr":19.86,"lvl_pct":19.55},{"week":"2026-06-22","ms":"inboxdollars_int","sid":"vc-18936","logins_all":178,"logins_player":156,"deps":40,"lvl20":41,"cm1":397.12,"dep_cvr":22.47,"lvl_pct":26.28},{"week":"2026-06-29","ms":"inboxdollars_int","sid":"vc-18936","logins_all":148,"logins_player":132,"deps":28,"lvl20":26,"cm1":253.34,"dep_cvr":18.92,"lvl_pct":19.7},{"week":"2026-07-06","ms":"inboxdollars_int","sid":"vc-18936","logins_all":90,"logins_player":79,"deps":21,"lvl20":18,"cm1":174.9,"dep_cvr":23.33,"lvl_pct":22.78},{"week":"2026-07-13","ms":"inboxdollars_int","sid":"vc-18936","logins_all":78,"logins_player":67,"deps":20,"lvl20":19,"cm1":89.42,"dep_cvr":25.64,"lvl_pct":28.36},{"week":"2026-07-20","ms":"inboxdollars_int","sid":"vc-18936","logins_all":25,"logins_player":23,"deps":6,"lvl20":3,"cm1":0.0,"dep_cvr":24.0,"lvl_pct":13.04},{"week":"2026-04-20","ms":"inboxdollars_int","sid":"vc-19490","logins_all":41,"logins_player":36,"deps":9,"lvl20":7,"cm1":50.14,"dep_cvr":21.95,"lvl_pct":19.44},{"week":"2026-04-27","ms":"inboxdollars_int","sid":"vc-19490","logins_all":46,"logins_player":37,"deps":13,"lvl20":12,"cm1":104.33,"dep_cvr":28.26,"lvl_pct":32.43},{"week":"2026-05-04","ms":"inboxdollars_int","sid":"vc-19490","logins_all":39,"logins_player":35,"deps":8,"lvl20":6,"cm1":54.83,"dep_cvr":20.51,"lvl_pct":17.14},{"week":"2026-05-11","ms":"inboxdollars_int","sid":"vc-19490","logins_all":52,"logins_player":41,"deps":9,"lvl20":10,"cm1":138.19,"dep_cvr":17.31,"lvl_pct":24.39},{"week":"2026-05-18","ms":"inboxdollars_int","sid":"vc-19490","logins_all":37,"logins_player":32,"deps":9,"lvl20":3,"cm1":-11.01,"dep_cvr":24.32,"lvl_pct":9.38},{"week":"2026-05-25","ms":"inboxdollars_int","sid":"vc-19490","logins_all":53,"logins_player":45,"deps":18,"lvl20":18,"cm1":5.35,"dep_cvr":33.96,"lvl_pct":40.0},{"week":"2026-06-01","ms":"inboxdollars_int","sid":"vc-19490","logins_all":72,"logins_player":57,"deps":16,"lvl20":13,"cm1":71.82,"dep_cvr":22.22,"lvl_pct":22.81},{"week":"2026-06-08","ms":"inboxdollars_int","sid":"vc-19490","logins_all":49,"logins_player":40,"deps":14,"lvl20":11,"cm1":30.78,"dep_cvr":28.57,"lvl_pct":27.5},{"week":"2026-06-15","ms":"inboxdollars_int","sid":"vc-19490","logins_all":34,"logins_player":26,"deps":8,"lvl20":4,"cm1":39.26,"dep_cvr":23.53,"lvl_pct":15.38},{"week":"2026-06-22","ms":"inboxdollars_int","sid":"vc-19490","logins_all":41,"logins_player":34,"deps":9,"lvl20":14,"cm1":85.06,"dep_cvr":21.95,"lvl_pct":41.18},{"week":"2026-06-29","ms":"inboxdollars_int","sid":"vc-19490","logins_all":42,"logins_player":33,"deps":12,"lvl20":9,"cm1":23.38,"dep_cvr":28.57,"lvl_pct":27.27},{"week":"2026-07-06","ms":"inboxdollars_int","sid":"vc-19490","logins_all":24,"logins_player":23,"deps":5,"lvl20":8,"cm1":57.98,"dep_cvr":20.83,"lvl_pct":34.78},{"week":"2026-07-13","ms":"inboxdollars_int","sid":"vc-19490","logins_all":15,"logins_player":12,"deps":5,"lvl20":4,"cm1":7.25,"dep_cvr":33.33,"lvl_pct":33.33},{"week":"2026-07-20","ms":"inboxdollars_int","sid":"vc-19490","logins_all":9,"logins_player":9,"deps":2,"lvl20":3,"cm1":0.0,"dep_cvr":22.22,"lvl_pct":33.33},{"week":"2026-04-20","ms":"inboxdollars_int","sid":"vc-20229","logins_all":299,"logins_player":269,"deps":51,"lvl20":43,"cm1":270.78,"dep_cvr":17.06,"lvl_pct":15.99},{"week":"2026-04-27","ms":"inboxdollars_int","sid":"vc-20229","logins_all":296,"logins_player":267,"deps":73,"lvl20":53,"cm1":438.27,"dep_cvr":24.66,"lvl_pct":19.85},{"week":"2026-05-04","ms":"inboxdollars_int","sid":"vc-20229","logins_all":431,"logins_player":387,"deps":80,"lvl20":67,"cm1":663.65,"dep_cvr":18.56,"lvl_pct":17.31},{"week":"2026-05-11","ms":"inboxdollars_int","sid":"vc-20229","logins_all":675,"logins_player":602,"deps":111,"lvl20":84,"cm1":544.5,"dep_cvr":16.44,"lvl_pct":13.95},{"week":"2026-05-18","ms":"inboxdollars_int","sid":"vc-20229","logins_all":776,"logins_player":708,"deps":81,"lvl20":66,"cm1":524.37,"dep_cvr":10.44,"lvl_pct":9.32},{"week":"2026-05-25","ms":"inboxdollars_int","sid":"vc-20229","logins_all":828,"logins_player":753,"deps":85,"lvl20":72,"cm1":248.59,"dep_cvr":10.27,"lvl_pct":9.56},{"week":"2026-06-01","ms":"inboxdollars_int","sid":"vc-20229","logins_all":1715,"logins_player":1582,"deps":160,"lvl20":102,"cm1":1120.84,"dep_cvr":9.33,"lvl_pct":6.45},{"week":"2026-06-08","ms":"inboxdollars_int","sid":"vc-20229","logins_all":1665,"logins_player":1505,"deps":209,"lvl20":162,"cm1":905.78,"dep_cvr":12.55,"lvl_pct":10.76},{"week":"2026-06-15","ms":"inboxdollars_int","sid":"vc-20229","logins_all":2491,"logins_player":2266,"deps":221,"lvl20":156,"cm1":268.69,"dep_cvr":8.87,"lvl_pct":6.88},{"week":"2026-06-22","ms":"inboxdollars_int","sid":"vc-20229","logins_all":3010,"logins_player":2700,"deps":317,"lvl20":215,"cm1":2235.85,"dep_cvr":10.53,"lvl_pct":7.96},{"week":"2026-06-29","ms":"inboxdollars_int","sid":"vc-20229","logins_all":2782,"logins_player":2515,"deps":281,"lvl20":205,"cm1":1935.05,"dep_cvr":10.1,"lvl_pct":8.15},{"week":"2026-07-06","ms":"inboxdollars_int","sid":"vc-20229","logins_all":806,"logins_player":748,"deps":111,"lvl20":75,"cm1":322.5,"dep_cvr":13.77,"lvl_pct":10.03},{"week":"2026-07-13","ms":"inboxdollars_int","sid":"vc-20229","logins_all":528,"logins_player":471,"deps":73,"lvl20":48,"cm1":250.04,"dep_cvr":13.83,"lvl_pct":10.19},{"week":"2026-07-20","ms":"inboxdollars_int","sid":"vc-20229","logins_all":339,"logins_player":298,"deps":41,"lvl20":27,"cm1":0.0,"dep_cvr":12.09,"lvl_pct":9.06},{"week":"2026-04-20","ms":"inboxdollars_int","sid":"vc-22482","logins_all":93,"logins_player":84,"deps":31,"lvl20":32,"cm1":30.0,"dep_cvr":33.33,"lvl_pct":38.1},{"week":"2026-04-27","ms":"inboxdollars_int","sid":"vc-22482","logins_all":117,"logins_player":105,"deps":42,"lvl20":36,"cm1":433.42,"dep_cvr":35.9,"lvl_pct":34.29},{"week":"2026-05-04","ms":"inboxdollars_int","sid":"vc-22482","logins_all":176,"logins_player":160,"deps":34,"lvl20":37,"cm1":451.6,"dep_cvr":19.32,"lvl_pct":23.13},{"week":"2026-05-11","ms":"inboxdollars_int","sid":"vc-22482","logins_all":391,"logins_player":330,"deps":57,"lvl20":57,"cm1":666.75,"dep_cvr":14.58,"lvl_pct":17.27},{"week":"2026-05-18","ms":"inboxdollars_int","sid":"vc-22482","logins_all":395,"logins_player":344,"deps":74,"lvl20":65,"cm1":411.29,"dep_cvr":18.73,"lvl_pct":18.9},{"week":"2026-05-25","ms":"inboxdollars_int","sid":"vc-22482","logins_all":231,"logins_player":207,"deps":35,"lvl20":33,"cm1":535.29,"dep_cvr":15.15,"lvl_pct":15.94},{"week":"2026-06-01","ms":"inboxdollars_int","sid":"vc-22482","logins_all":195,"logins_player":174,"deps":28,"lvl20":24,"cm1":69.8,"dep_cvr":14.36,"lvl_pct":13.79},{"week":"2026-06-08","ms":"inboxdollars_int","sid":"vc-22482","logins_all":118,"logins_player":105,"deps":23,"lvl20":27,"cm1":-408.67,"dep_cvr":19.49,"lvl_pct":25.71},{"week":"2026-06-15","ms":"inboxdollars_int","sid":"vc-22482","logins_all":78,"logins_player":64,"deps":23,"lvl20":20,"cm1":-81.45,"dep_cvr":29.49,"lvl_pct":31.25},{"week":"2026-06-22","ms":"inboxdollars_int","sid":"vc-22482","logins_all":234,"logins_player":194,"deps":34,"lvl20":32,"cm1":879.35,"dep_cvr":14.53,"lvl_pct":16.49},{"week":"2026-06-29","ms":"inboxdollars_int","sid":"vc-22482","logins_all":157,"logins_player":133,"deps":34,"lvl20":26,"cm1":800.57,"dep_cvr":21.66,"lvl_pct":19.55},{"week":"2026-07-06","ms":"inboxdollars_int","sid":"vc-22482","logins_all":71,"logins_player":61,"deps":24,"lvl20":22,"cm1":465.84,"dep_cvr":33.8,"lvl_pct":36.07},{"week":"2026-07-13","ms":"inboxdollars_int","sid":"vc-22482","logins_all":60,"logins_player":55,"deps":42,"lvl20":35,"cm1":264.33,"dep_cvr":70.0,"lvl_pct":63.64},{"week":"2026-07-20","ms":"inboxdollars_int","sid":"vc-22482","logins_all":31,"logins_player":25,"deps":6,"lvl20":5,"cm1":0.0,"dep_cvr":19.35,"lvl_pct":20.0},{"week":"2026-04-20","ms":"inboxdollars_int","sid":"vc-22484","logins_all":116,"logins_player":105,"deps":41,"lvl20":34,"cm1":456.68,"dep_cvr":35.34,"lvl_pct":32.38},{"week":"2026-04-27","ms":"inboxdollars_int","sid":"vc-22484","logins_all":100,"logins_player":93,"deps":38,"lvl20":35,"cm1":427.6,"dep_cvr":38.0,"lvl_pct":37.63},{"week":"2026-05-04","ms":"inboxdollars_int","sid":"vc-22484","logins_all":113,"logins_player":102,"deps":35,"lvl20":35,"cm1":321.9,"dep_cvr":30.97,"lvl_pct":34.31},{"week":"2026-05-11","ms":"inboxdollars_int","sid":"vc-22484","logins_all":159,"logins_player":149,"deps":42,"lvl20":39,"cm1":399.49,"dep_cvr":26.42,"lvl_pct":26.17},{"week":"2026-05-18","ms":"inboxdollars_int","sid":"vc-22484","logins_all":143,"logins_player":132,"deps":28,"lvl20":25,"cm1":89.61,"dep_cvr":19.58,"lvl_pct":18.94},{"week":"2026-05-25","ms":"inboxdollars_int","sid":"vc-22484","logins_all":108,"logins_player":96,"deps":23,"lvl20":16,"cm1":763.6,"dep_cvr":21.3,"lvl_pct":16.67},{"week":"2026-06-01","ms":"inboxdollars_int","sid":"vc-22484","logins_all":108,"logins_player":99,"deps":23,"lvl20":16,"cm1":72.93,"dep_cvr":21.3,"lvl_pct":16.16},{"week":"2026-06-08","ms":"inboxdollars_int","sid":"vc-22484","logins_all":81,"logins_player":73,"deps":17,"lvl20":16,"cm1":374.45,"dep_cvr":20.99,"lvl_pct":21.92},{"week":"2026-06-15","ms":"inboxdollars_int","sid":"vc-22484","logins_all":73,"logins_player":69,"deps":12,"lvl20":12,"cm1":187.74,"dep_cvr":16.44,"lvl_pct":17.39},{"week":"2026-06-22","ms":"inboxdollars_int","sid":"vc-22484","logins_all":88,"logins_player":80,"deps":18,"lvl20":19,"cm1":120.9,"dep_cvr":20.45,"lvl_pct":23.75},{"week":"2026-06-29","ms":"inboxdollars_int","sid":"vc-22484","logins_all":94,"logins_player":85,"deps":24,"lvl20":22,"cm1":369.45,"dep_cvr":25.53,"lvl_pct":25.88},{"week":"2026-07-06","ms":"inboxdollars_int","sid":"vc-22484","logins_all":60,"logins_player":56,"deps":20,"lvl20":17,"cm1":300.82,"dep_cvr":33.33,"lvl_pct":30.36},{"week":"2026-07-13","ms":"inboxdollars_int","sid":"vc-22484","logins_all":49,"logins_player":40,"deps":9,"lvl20":5,"cm1":54.71,"dep_cvr":18.37,"lvl_pct":12.5},{"week":"2026-07-20","ms":"inboxdollars_int","sid":"vc-22484","logins_all":12,"logins_player":10,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-04-20","ms":"inboxdollars_int","sid":"vc-26555","logins_all":50,"logins_player":43,"deps":2,"lvl20":6,"cm1":0.79,"dep_cvr":4.0,"lvl_pct":13.95},{"week":"2026-04-27","ms":"inboxdollars_int","sid":"vc-26555","logins_all":45,"logins_player":36,"deps":3,"lvl20":1,"cm1":-2.23,"dep_cvr":6.67,"lvl_pct":2.78},{"week":"2026-05-04","ms":"inboxdollars_int","sid":"vc-26555","logins_all":25,"logins_player":23,"deps":0,"lvl20":0,"cm1":0.85,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-05-11","ms":"inboxdollars_int","sid":"vc-26555","logins_all":35,"logins_player":29,"deps":1,"lvl20":3,"cm1":0.89,"dep_cvr":2.86,"lvl_pct":10.34},{"week":"2026-05-18","ms":"inboxdollars_int","sid":"vc-26555","logins_all":39,"logins_player":33,"deps":4,"lvl20":4,"cm1":4.15,"dep_cvr":10.26,"lvl_pct":12.12},{"week":"2026-05-25","ms":"inboxdollars_int","sid":"vc-26555","logins_all":48,"logins_player":36,"deps":1,"lvl20":1,"cm1":-1.78,"dep_cvr":2.08,"lvl_pct":2.78},{"week":"2026-06-01","ms":"inboxdollars_int","sid":"vc-26555","logins_all":3,"logins_player":3,"deps":1,"lvl20":1,"cm1":1.25,"dep_cvr":33.33,"lvl_pct":33.33},{"week":"2026-04-20","ms":"inboxdollars_int","sid":"vc-2961","logins_all":50,"logins_player":42,"deps":14,"lvl20":18,"cm1":65.19,"dep_cvr":28.0,"lvl_pct":42.86},{"week":"2026-04-27","ms":"inboxdollars_int","sid":"vc-2961","logins_all":34,"logins_player":29,"deps":6,"lvl20":6,"cm1":-162.57,"dep_cvr":17.65,"lvl_pct":20.69},{"week":"2026-05-04","ms":"inboxdollars_int","sid":"vc-2961","logins_all":32,"logins_player":29,"deps":9,"lvl20":9,"cm1":16.59,"dep_cvr":28.13,"lvl_pct":31.03},{"week":"2026-05-11","ms":"inboxdollars_int","sid":"vc-2961","logins_all":30,"logins_player":23,"deps":6,"lvl20":4,"cm1":86.28,"dep_cvr":20.0,"lvl_pct":17.39},{"week":"2026-05-18","ms":"inboxdollars_int","sid":"vc-2961","logins_all":49,"logins_player":41,"deps":7,"lvl20":8,"cm1":-121.76,"dep_cvr":14.29,"lvl_pct":19.51},{"week":"2026-05-25","ms":"inboxdollars_int","sid":"vc-2961","logins_all":110,"logins_player":79,"deps":14,"lvl20":18,"cm1":-202.64,"dep_cvr":12.73,"lvl_pct":22.78},{"week":"2026-06-01","ms":"inboxdollars_int","sid":"vc-2961","logins_all":105,"logins_player":83,"deps":13,"lvl20":14,"cm1":75.76,"dep_cvr":12.38,"lvl_pct":16.87},{"week":"2026-06-08","ms":"inboxdollars_int","sid":"vc-2961","logins_all":56,"logins_player":42,"deps":9,"lvl20":7,"cm1":232.32,"dep_cvr":16.07,"lvl_pct":16.67},{"week":"2026-06-15","ms":"inboxdollars_int","sid":"vc-2961","logins_all":46,"logins_player":35,"deps":10,"lvl20":10,"cm1":173.45,"dep_cvr":21.74,"lvl_pct":28.57},{"week":"2026-06-22","ms":"inboxdollars_int","sid":"vc-2961","logins_all":55,"logins_player":51,"deps":22,"lvl20":17,"cm1":214.62,"dep_cvr":40.0,"lvl_pct":33.33},{"week":"2026-06-29","ms":"inboxdollars_int","sid":"vc-2961","logins_all":53,"logins_player":43,"deps":13,"lvl20":16,"cm1":59.57,"dep_cvr":24.53,"lvl_pct":37.21},{"week":"2026-07-06","ms":"inboxdollars_int","sid":"vc-2961","logins_all":83,"logins_player":76,"deps":19,"lvl20":17,"cm1":98.47,"dep_cvr":22.89,"lvl_pct":22.37},{"week":"2026-07-13","ms":"inboxdollars_int","sid":"vc-2961","logins_all":92,"logins_player":82,"deps":16,"lvl20":11,"cm1":34.2,"dep_cvr":17.39,"lvl_pct":13.41},{"week":"2026-07-20","ms":"inboxdollars_int","sid":"vc-2961","logins_all":56,"logins_player":48,"deps":8,"lvl20":5,"cm1":0.0,"dep_cvr":14.29,"lvl_pct":10.42},{"week":"2026-04-20","ms":"inboxdollars_int","sid":"vc-32188","logins_all":55,"logins_player":54,"deps":6,"lvl20":3,"cm1":10.15,"dep_cvr":10.91,"lvl_pct":5.56},{"week":"2026-04-27","ms":"inboxdollars_int","sid":"vc-32188","logins_all":158,"logins_player":150,"deps":9,"lvl20":9,"cm1":53.08,"dep_cvr":5.7,"lvl_pct":6.0},{"week":"2026-05-04","ms":"inboxdollars_int","sid":"vc-32188","logins_all":172,"logins_player":161,"deps":12,"lvl20":10,"cm1":90.09,"dep_cvr":6.98,"lvl_pct":6.21},{"week":"2026-05-11","ms":"inboxdollars_int","sid":"vc-32188","logins_all":60,"logins_player":57,"deps":6,"lvl20":5,"cm1":10.48,"dep_cvr":10.0,"lvl_pct":8.77},{"week":"2026-05-18","ms":"inboxdollars_int","sid":"vc-32188","logins_all":199,"logins_player":165,"deps":17,"lvl20":18,"cm1":94.38,"dep_cvr":8.54,"lvl_pct":10.91},{"week":"2026-05-25","ms":"inboxdollars_int","sid":"vc-32188","logins_all":383,"logins_player":328,"deps":46,"lvl20":28,"cm1":89.4,"dep_cvr":12.01,"lvl_pct":8.54},{"week":"2026-06-01","ms":"inboxdollars_int","sid":"vc-32188","logins_all":339,"logins_player":279,"deps":36,"lvl20":21,"cm1":5.15,"dep_cvr":10.62,"lvl_pct":7.53},{"week":"2026-06-08","ms":"inboxdollars_int","sid":"vc-32188","logins_all":881,"logins_player":806,"deps":147,"lvl20":87,"cm1":532.62,"dep_cvr":16.69,"lvl_pct":10.79},{"week":"2026-06-15","ms":"inboxdollars_int","sid":"vc-32188","logins_all":557,"logins_player":499,"deps":97,"lvl20":62,"cm1":293.46,"dep_cvr":17.41,"lvl_pct":12.42},{"week":"2026-06-22","ms":"inboxdollars_int","sid":"vc-32188","logins_all":379,"logins_player":348,"deps":55,"lvl20":24,"cm1":345.4,"dep_cvr":14.51,"lvl_pct":6.9},{"week":"2026-06-29","ms":"inboxdollars_int","sid":"vc-32188","logins_all":269,"logins_player":239,"deps":34,"lvl20":19,"cm1":103.72,"dep_cvr":12.64,"lvl_pct":7.95},{"week":"2026-07-06","ms":"inboxdollars_int","sid":"vc-32188","logins_all":97,"logins_player":89,"deps":16,"lvl20":10,"cm1":47.97,"dep_cvr":16.49,"lvl_pct":11.24},{"week":"2026-07-13","ms":"inboxdollars_int","sid":"vc-32188","logins_all":68,"logins_player":62,"deps":11,"lvl20":7,"cm1":88.0,"dep_cvr":16.18,"lvl_pct":11.29},{"week":"2026-07-20","ms":"inboxdollars_int","sid":"vc-32188","logins_all":75,"logins_player":67,"deps":11,"lvl20":7,"cm1":0.0,"dep_cvr":14.67,"lvl_pct":10.45},{"week":"2026-04-27","ms":"inboxdollars_int","sid":"vc-3413","logins_all":32,"logins_player":28,"deps":4,"lvl20":3,"cm1":13.93,"dep_cvr":12.5,"lvl_pct":10.71},{"week":"2026-05-04","ms":"inboxdollars_int","sid":"vc-3413","logins_all":12,"logins_player":10,"deps":1,"lvl20":3,"cm1":2.84,"dep_cvr":8.33,"lvl_pct":30.0},{"week":"2026-05-11","ms":"inboxdollars_int","sid":"vc-3413","logins_all":59,"logins_player":51,"deps":4,"lvl20":4,"cm1":-3.87,"dep_cvr":6.78,"lvl_pct":7.84},{"week":"2026-05-18","ms":"inboxdollars_int","sid":"vc-3413","logins_all":61,"logins_player":47,"deps":3,"lvl20":5,"cm1":18.2,"dep_cvr":4.92,"lvl_pct":10.64},{"week":"2026-05-25","ms":"inboxdollars_int","sid":"vc-3413","logins_all":51,"logins_player":45,"deps":1,"lvl20":4,"cm1":5.54,"dep_cvr":1.96,"lvl_pct":8.89},{"week":"2026-06-01","ms":"inboxdollars_int","sid":"vc-3413","logins_all":66,"logins_player":56,"deps":3,"lvl20":4,"cm1":2.57,"dep_cvr":4.55,"lvl_pct":7.14},{"week":"2026-06-08","ms":"inboxdollars_int","sid":"vc-3413","logins_all":121,"logins_player":97,"deps":7,"lvl20":3,"cm1":3.22,"dep_cvr":5.79,"lvl_pct":3.09},{"week":"2026-06-15","ms":"inboxdollars_int","sid":"vc-3413","logins_all":1,"logins_player":1,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-04-20","ms":"inboxdollars_int","sid":"vc-36668","logins_all":9,"logins_player":8,"deps":3,"lvl20":2,"cm1":9.39,"dep_cvr":33.33,"lvl_pct":25.0},{"week":"2026-04-27","ms":"inboxdollars_int","sid":"vc-36668","logins_all":16,"logins_player":16,"deps":5,"lvl20":6,"cm1":36.6,"dep_cvr":31.25,"lvl_pct":37.5},{"week":"2026-05-04","ms":"inboxdollars_int","sid":"vc-36668","logins_all":10,"logins_player":8,"deps":2,"lvl20":4,"cm1":13.08,"dep_cvr":20.0,"lvl_pct":50.0},{"week":"2026-05-11","ms":"inboxdollars_int","sid":"vc-36668","logins_all":13,"logins_player":11,"deps":6,"lvl20":3,"cm1":71.55,"dep_cvr":46.15,"lvl_pct":27.27},{"week":"2026-05-18","ms":"inboxdollars_int","sid":"vc-36668","logins_all":19,"logins_player":17,"deps":7,"lvl20":5,"cm1":45.97,"dep_cvr":36.84,"lvl_pct":29.41},{"week":"2026-05-25","ms":"inboxdollars_int","sid":"vc-36668","logins_all":24,"logins_player":24,"deps":7,"lvl20":5,"cm1":61.74,"dep_cvr":29.17,"lvl_pct":20.83},{"week":"2026-06-01","ms":"inboxdollars_int","sid":"vc-36668","logins_all":29,"logins_player":26,"deps":10,"lvl20":8,"cm1":24.78,"dep_cvr":34.48,"lvl_pct":30.77},{"week":"2026-06-08","ms":"inboxdollars_int","sid":"vc-36668","logins_all":43,"logins_player":38,"deps":13,"lvl20":10,"cm1":152.34,"dep_cvr":30.23,"lvl_pct":26.32},{"week":"2026-06-15","ms":"inboxdollars_int","sid":"vc-36668","logins_all":54,"logins_player":45,"deps":10,"lvl20":7,"cm1":-0.87,"dep_cvr":18.52,"lvl_pct":15.56},{"week":"2026-06-22","ms":"inboxdollars_int","sid":"vc-36668","logins_all":74,"logins_player":67,"deps":18,"lvl20":13,"cm1":174.66,"dep_cvr":24.32,"lvl_pct":19.4},{"week":"2026-06-29","ms":"inboxdollars_int","sid":"vc-36668","logins_all":87,"logins_player":75,"deps":12,"lvl20":15,"cm1":103.65,"dep_cvr":13.79,"lvl_pct":20.0},{"week":"2026-07-06","ms":"inboxdollars_int","sid":"vc-36668","logins_all":89,"logins_player":80,"deps":13,"lvl20":9,"cm1":222.36,"dep_cvr":14.61,"lvl_pct":11.25},{"week":"2026-07-13","ms":"inboxdollars_int","sid":"vc-36668","logins_all":43,"logins_player":37,"deps":4,"lvl20":4,"cm1":21.58,"dep_cvr":9.3,"lvl_pct":10.81},{"week":"2026-07-20","ms":"inboxdollars_int","sid":"vc-36668","logins_all":20,"logins_player":17,"deps":4,"lvl20":3,"cm1":0.0,"dep_cvr":20.0,"lvl_pct":17.65},{"week":"2026-04-20","ms":"inboxdollars_int","sid":"vc-36755","logins_all":1029,"logins_player":962,"deps":58,"lvl20":54,"cm1":174.31,"dep_cvr":5.64,"lvl_pct":5.61},{"week":"2026-04-27","ms":"inboxdollars_int","sid":"vc-36755","logins_all":953,"logins_player":861,"deps":68,"lvl20":56,"cm1":58.14,"dep_cvr":7.14,"lvl_pct":6.5},{"week":"2026-05-04","ms":"inboxdollars_int","sid":"vc-36755","logins_all":676,"logins_player":618,"deps":59,"lvl20":45,"cm1":59.72,"dep_cvr":8.73,"lvl_pct":7.28},{"week":"2026-05-11","ms":"inboxdollars_int","sid":"vc-36755","logins_all":418,"logins_player":379,"deps":36,"lvl20":27,"cm1":192.02,"dep_cvr":8.61,"lvl_pct":7.12},{"week":"2026-05-18","ms":"inboxdollars_int","sid":"vc-36755","logins_all":518,"logins_player":472,"deps":33,"lvl20":25,"cm1":-85.98,"dep_cvr":6.37,"lvl_pct":5.3},{"week":"2026-05-25","ms":"inboxdollars_int","sid":"vc-36755","logins_all":591,"logins_player":533,"deps":47,"lvl20":31,"cm1":823.37,"dep_cvr":7.95,"lvl_pct":5.82},{"week":"2026-06-01","ms":"inboxdollars_int","sid":"vc-36755","logins_all":371,"logins_player":340,"deps":21,"lvl20":16,"cm1":-1.29,"dep_cvr":5.66,"lvl_pct":4.71},{"week":"2026-06-08","ms":"inboxdollars_int","sid":"vc-36755","logins_all":418,"logins_player":377,"deps":36,"lvl20":28,"cm1":44.4,"dep_cvr":8.61,"lvl_pct":7.43},{"week":"2026-06-15","ms":"inboxdollars_int","sid":"vc-36755","logins_all":583,"logins_player":528,"deps":56,"lvl20":40,"cm1":87.89,"dep_cvr":9.61,"lvl_pct":7.58},{"week":"2026-06-22","ms":"inboxdollars_int","sid":"vc-36755","logins_all":107,"logins_player":89,"deps":9,"lvl20":9,"cm1":-78.74,"dep_cvr":8.41,"lvl_pct":10.11},{"week":"2026-06-29","ms":"inboxdollars_int","sid":"vc-36755","logins_all":51,"logins_player":44,"deps":8,"lvl20":6,"cm1":40.06,"dep_cvr":15.69,"lvl_pct":13.64},{"week":"2026-07-06","ms":"inboxdollars_int","sid":"vc-36755","logins_all":6,"logins_player":4,"deps":1,"lvl20":0,"cm1":-21.59,"dep_cvr":16.67,"lvl_pct":0.0},{"week":"2026-05-18","ms":"myappfre_int","sid":"1318","logins_all":5,"logins_player":5,"deps":1,"lvl20":1,"cm1":11.15,"dep_cvr":20.0,"lvl_pct":20.0},{"week":"2026-05-25","ms":"myappfre_int","sid":"1318","logins_all":5,"logins_player":3,"deps":0,"lvl20":0,"cm1":-0.06,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-06-01","ms":"myappfre_int","sid":"1318","logins_all":14,"logins_player":11,"deps":3,"lvl20":6,"cm1":42.52,"dep_cvr":21.43,"lvl_pct":54.55},{"week":"2026-06-08","ms":"myappfre_int","sid":"1318","logins_all":15,"logins_player":14,"deps":6,"lvl20":5,"cm1":11.96,"dep_cvr":40.0,"lvl_pct":35.71},{"week":"2026-06-15","ms":"myappfre_int","sid":"1318","logins_all":9,"logins_player":7,"deps":0,"lvl20":0,"cm1":-0.14,"dep_cvr":0.0,"lvl_pct":0.0},{"week":"2026-06-22","ms":"myappfre_int","sid":"1318","logins_all":15,"logins_player":13,"deps":4,"lvl20":4,"cm1":80.07,"dep_cvr":26.67,"lvl_pct":30.77},{"week":"2026-06-29","ms":"myappfre_int","sid":"1318","logins_all":20,"logins_player":15,"deps":2,"lvl20":2,"cm1":105.07,"dep_cvr":10.0,"lvl_pct":13.33},{"week":"2026-07-06","ms":"myappfre_int","sid":"1318","logins_all":97,"logins_player":84,"deps":15,"lvl20":16,"cm1":206.36,"dep_cvr":15.46,"lvl_pct":19.05},{"week":"2026-07-13","ms":"myappfre_int","sid":"1318","logins_all":122,"logins_player":96,"deps":23,"lvl20":22,"cm1":30.27,"dep_cvr":18.85,"lvl_pct":22.92},{"week":"2026-07-20","ms":"myappfre_int","sid":"1318","logins_all":290,"logins_player":244,"deps":31,"lvl20":21,"cm1":0.0,"dep_cvr":10.69,"lvl_pct":8.61},{"week":"2026-04-20","ms":"myappfre_int","sid":"2036","logins_all":100,"logins_player":85,"deps":22,"lvl20":18,"cm1":56.34,"dep_cvr":22.0,"lvl_pct":21.18},{"week":"2026-04-27","ms":"myappfre_int","sid":"2036","logins_all":516,"logins_player":445,"deps":94,"lvl20":95,"cm1":816.87,"dep_cvr":18.22,"lvl_pct":21.35},{"week":"2026-05-04","ms":"myappfre_int","sid":"2036","logins_all":2,"logins_player":2,"deps":1,"lvl20":2,"cm1":179.71,"dep_cvr":50.0,"lvl_pct":100.0},{"week":"2026-07-13","ms":"myappfre_int","sid":"2036","logins_all":877,"logins_player":742,"deps":148,"lvl20":111,"cm1":94.13,"dep_cvr":16.88,"lvl_pct":14.96},{"week":"2026-07-20","ms":"myappfre_int","sid":"2036","logins_all":933,"logins_player":773,"deps":112,"lvl20":81,"cm1":0.0,"dep_cvr":12.0,"lvl_pct":10.48},{"week":"2026-04-20","ms":"myappfre_int","sid":"2469","logins_all":40,"logins_player":28,"deps":5,"lvl20":3,"cm1":6.46,"dep_cvr":12.5,"lvl_pct":10.71},{"week":"2026-04-27","ms":"myappfre_int","sid":"2469","logins_all":51,"logins_player":46,"deps":5,"lvl20":4,"cm1":21.7,"dep_cvr":9.8,"lvl_pct":8.7},{"week":"2026-05-04","ms":"myappfre_int","sid":"2469","logins_all":36,"logins_player":29,"deps":4,"lvl20":5,"cm1":63.95,"dep_cvr":11.11,"lvl_pct":17.24},{"week":"2026-05-11","ms":"myappfre_int","sid":"2469","logins_all":41,"logins_player":32,"deps":8,"lvl20":5,"cm1":12.8,"dep_cvr":19.51,"lvl_pct":15.63},{"week":"2026-05-18","ms":"myappfre_int","sid":"2469","logins_all":39,"logins_player":29,"deps":7,"lvl20":5,"cm1":24.6,"dep_cvr":17.95,"lvl_pct":17.24},{"week":"2026-05-25","ms":"myappfre_int","sid":"2469","logins_all":49,"logins_player":34,"deps":6,"lvl20":5,"cm1":55.72,"dep_cvr":12.24,"lvl_pct":14.71},{"week":"2026-06-01","ms":"myappfre_int","sid":"2469","logins_all":49,"logins_player":36,"deps":10,"lvl20":8,"cm1":-41.56,"dep_cvr":20.41,"lvl_pct":22.22},{"week":"2026-06-08","ms":"myappfre_int","sid":"2469","logins_all":42,"logins_player":35,"deps":7,"lvl20":7,"cm1":1.39,"dep_cvr":16.67,"lvl_pct":20.0},{"week":"2026-06-15","ms":"myappfre_int","sid":"2469","logins_all":52,"logins_player":42,"deps":10,"lvl20":9,"cm1":113.61,"dep_cvr":19.23,"lvl_pct":21.43},{"week":"2026-06-22","ms":"myappfre_int","sid":"2469","logins_all":50,"logins_player":36,"deps":3,"lvl20":4,"cm1":-34.07,"dep_cvr":6.0,"lvl_pct":11.11},{"week":"2026-06-29","ms":"myappfre_int","sid":"2469","logins_all":43,"logins_player":33,"deps":11,"lvl20":8,"cm1":45.28,"dep_cvr":25.58,"lvl_pct":24.24},{"week":"2026-07-06","ms":"myappfre_int","sid":"2469","logins_all":23,"logins_player":19,"deps":2,"lvl20":3,"cm1":8.76,"dep_cvr":8.7,"lvl_pct":15.79},{"week":"2026-07-13","ms":"myappfre_int","sid":"2469","logins_all":15,"logins_player":10,"deps":4,"lvl20":2,"cm1":15.6,"dep_cvr":26.67,"lvl_pct":20.0},{"week":"2026-07-20","ms":"myappfre_int","sid":"2469","logins_all":12,"logins_player":9,"deps":2,"lvl20":1,"cm1":0.0,"dep_cvr":16.67,"lvl_pct":11.11},{"week":"2026-04-20","ms":"myappfre_int","sid":"3739","logins_all":1584,"logins_player":1369,"deps":342,"lvl20":205,"cm1":1473.43,"dep_cvr":21.59,"lvl_pct":14.97},{"week":"2026-04-27","ms":"myappfre_int","sid":"3739","logins_all":1362,"logins_player":1127,"deps":313,"lvl20":184,"cm1":1373.15,"dep_cvr":22.98,"lvl_pct":16.33},{"week":"2026-05-04","ms":"myappfre_int","sid":"3739","logins_all":762,"logins_player":640,"deps":204,"lvl20":128,"cm1":925.46,"dep_cvr":26.77,"lvl_pct":20.0},{"week":"2026-05-11","ms":"myappfre_int","sid":"3739","logins_all":692,"logins_player":560,"deps":175,"lvl20":128,"cm1":1208.04,"dep_cvr":25.29,"lvl_pct":22.86},{"week":"2026-05-18","ms":"myappfre_int","sid":"3739","logins_all":888,"logins_player":689,"deps":236,"lvl20":136,"cm1":1050.96,"dep_cvr":26.58,"lvl_pct":19.74},{"week":"2026-05-25","ms":"myappfre_int","sid":"3739","logins_all":1326,"logins_player":1034,"deps":369,"lvl20":239,"cm1":1345.14,"dep_cvr":27.83,"lvl_pct":23.11},{"week":"2026-06-01","ms":"myappfre_int","sid":"3739","logins_all":1628,"logins_player":1277,"deps":369,"lvl20":224,"cm1":1065.23,"dep_cvr":22.67,"lvl_pct":17.54},{"week":"2026-06-08","ms":"myappfre_int","sid":"3739","logins_all":1516,"logins_player":1227,"deps":361,"lvl20":213,"cm1":1181.8,"dep_cvr":23.81,"lvl_pct":17.36},{"week":"2026-06-15","ms":"myappfre_int","sid":"3739","logins_all":1414,"logins_player":1113,"deps":318,"lvl20":193,"cm1":1203.45,"dep_cvr":22.49,"lvl_pct":17.34},{"week":"2026-06-22","ms":"myappfre_int","sid":"3739","logins_all":2675,"logins_player":2236,"deps":460,"lvl20":285,"cm1":1230.11,"dep_cvr":17.2,"lvl_pct":12.75},{"week":"2026-06-29","ms":"myappfre_int","sid":"3739","logins_all":2193,"logins_player":1842,"deps":395,"lvl20":214,"cm1":1299.41,"dep_cvr":18.01,"lvl_pct":11.62},{"week":"2026-07-06","ms":"myappfre_int","sid":"3739","logins_all":1336,"logins_player":1128,"deps":258,"lvl20":154,"cm1":1012.26,"dep_cvr":19.31,"lvl_pct":13.65},{"week":"2026-07-13","ms":"myappfre_int","sid":"3739","logins_all":629,"logins_player":526,"deps":109,"lvl20":68,"cm1":314.45,"dep_cvr":17.33,"lvl_pct":12.93},{"week":"2026-07-20","ms":"myappfre_int","sid":"3739","logins_all":189,"logins_player":154,"deps":28,"lvl20":15,"cm1":0.0,"dep_cvr":14.81,"lvl_pct":9.74},{"week":"2026-05-18","ms":"myappfre_int","sid":"4558","logins_all":34,"logins_player":32,"deps":0,"lvl20":1,"cm1":-1.0,"dep_cvr":0.0,"lvl_pct":3.13},{"week":"2026-05-25","ms":"myappfre_int","sid":"4558","logins_all":77,"logins_player":69,"deps":5,"lvl20":4,"cm1":97.35,"dep_cvr":6.49,"lvl_pct":5.8},{"week":"2026-06-01","ms":"myappfre_int","sid":"4558","logins_all":70,"logins_player":68,"deps":5,"lvl20":4,"cm1":190.53,"dep_cvr":7.14,"lvl_pct":5.88},{"week":"2026-06-08","ms":"myappfre_int","sid":"4558","logins_all":94,"logins_player":84,"deps":3,"lvl20":5,"cm1":28.97,"dep_cvr":3.19,"lvl_pct":5.95},{"week":"2026-06-15","ms":"myappfre_int","sid":"4558","logins_all":97,"logins_player":86,"deps":2,"lvl20":2,"cm1":12.11,"dep_cvr":2.06,"lvl_pct":2.33},{"week":"2026-06-22","ms":"myappfre_int","sid":"4558","logins_all":118,"logins_player":108,"deps":4,"lvl20":4,"cm1":-19.99,"dep_cvr":3.39,"lvl_pct":3.7},{"week":"2026-06-29","ms":"myappfre_int","sid":"4558","logins_all":112,"logins_player":94,"deps":11,"lvl20":6,"cm1":177.63,"dep_cvr":9.82,"lvl_pct":6.38},{"week":"2026-07-06","ms":"myappfre_int","sid":"4558","logins_all":114,"logins_player":104,"deps":7,"lvl20":3,"cm1":9.91,"dep_cvr":6.14,"lvl_pct":2.88},{"week":"2026-07-13","ms":"myappfre_int","sid":"4558","logins_all":118,"logins_player":102,"deps":5,"lvl20":3,"cm1":2.12,"dep_cvr":4.24,"lvl_pct":2.94},{"week":"2026-07-20","ms":"myappfre_int","sid":"4558","logins_all":71,"logins_player":68,"deps":7,"lvl20":5,"cm1":0.0,"dep_cvr":9.86,"lvl_pct":7.35},{"week":"2026-04-20","ms":"myappfre_int","sid":"4740","logins_all":25,"logins_player":24,"deps":4,"lvl20":3,"cm1":11.68,"dep_cvr":16.0,"lvl_pct":12.5},{"week":"2026-04-27","ms":"myappfre_int","sid":"4740","logins_all":21,"logins_player":20,"deps":5,"lvl20":5,"cm1":-3.08,"dep_cvr":23.81,"lvl_pct":25.0},{"week":"2026-05-04","ms":"myappfre_int","sid":"4740","logins_all":23,"logins_player":19,"deps":2,"lvl20":2,"cm1":2.86,"dep_cvr":8.7,"lvl_pct":10.53},{"week":"2026-05-11","ms":"myappfre_int","sid":"4740","logins_all":33,"logins_player":29,"deps":5,"lvl20":4,"cm1":14.86,"dep_cvr":15.15,"lvl_pct":13.79},{"week":"2026-05-18","ms":"myappfre_int","sid":"4740","logins_all":38,"logins_player":31,"deps":6,"lvl20":2,"cm1":13.78,"dep_cvr":15.79,"lvl_pct":6.45},{"week":"2026-05-25","ms":"myappfre_int","sid":"4740","logins_all":27,"logins_player":20,"deps":2,"lvl20":1,"cm1":11.3,"dep_cvr":7.41,"lvl_pct":5.0},{"week":"2026-06-01","ms":"myappfre_int","sid":"4740","logins_all":12,"logins_player":11,"deps":1,"lvl20":1,"cm1":-5.06,"dep_cvr":8.33,"lvl_pct":9.09},{"week":"2026-06-08","ms":"myappfre_int","sid":"4740","logins_all":26,"logins_player":21,"deps":2,"lvl20":2,"cm1":-24.59,"dep_cvr":7.69,"lvl_pct":9.52},{"week":"2026-06-15","ms":"myappfre_int","sid":"4740","logins_all":51,"logins_player":44,"deps":10,"lvl20":6,"cm1":35.96,"dep_cvr":19.61,"lvl_pct":13.64},{"week":"2026-06-22","ms":"myappfre_int","sid":"4740","logins_all":30,"logins_player":26,"deps":0,"lvl20":2,"cm1":3.39,"dep_cvr":0.0,"lvl_pct":7.69},{"week":"2026-06-29","ms":"myappfre_int","sid":"4740","logins_all":15,"logins_player":13,"deps":3,"lvl20":2,"cm1":24.06,"dep_cvr":20.0,"lvl_pct":15.38},{"week":"2026-07-06","ms":"myappfre_int","sid":"4740","logins_all":13,"logins_player":11,"deps":1,"lvl20":3,"cm1":40.37,"dep_cvr":7.69,"lvl_pct":27.27},{"week":"2026-07-13","ms":"myappfre_int","sid":"4740","logins_all":20,"logins_player":18,"deps":2,"lvl20":4,"cm1":21.08,"dep_cvr":10.0,"lvl_pct":22.22},{"week":"2026-07-20","ms":"myappfre_int","sid":"4740","logins_all":9,"logins_player":7,"deps":1,"lvl20":1,"cm1":0.0,"dep_cvr":11.11,"lvl_pct":14.29}],"siteid_bucket":[{"ms":"adaction5_int","sid":"329825346","bucket":"prior5_8","logins_all":300,"logins_player":254,"deps":48,"lvl20":48,"cm1":322.38,"dep_cvr":16.0,"lvl_pct":18.9},{"ms":"adaction5_int","sid":"329825346","bucket":"last4","logins_all":129,"logins_player":99,"deps":20,"lvl20":18,"cm1":229.02,"dep_cvr":15.5,"lvl_pct":18.18},{"ms":"adaction5_int","sid":"329825346","bucket":"prev_week","logins_all":7,"logins_player":5,"deps":1,"lvl20":0,"cm1":-2.67,"dep_cvr":14.29,"lvl_pct":0.0},{"ms":"adaction5_int","sid":"329825346","bucket":"latest_matured","logins_all":14,"logins_player":11,"deps":1,"lvl20":2,"cm1":7.64,"dep_cvr":7.14,"lvl_pct":18.18},{"ms":"adaction5_int","sid":"329825370","bucket":"prior5_8","logins_all":764,"logins_player":668,"deps":162,"lvl20":133,"cm1":-613.13,"dep_cvr":21.2,"lvl_pct":19.91},{"ms":"adaction5_int","sid":"329825370","bucket":"last4","logins_all":289,"logins_player":238,"deps":47,"lvl20":47,"cm1":534.22,"dep_cvr":16.26,"lvl_pct":19.75},{"ms":"adaction5_int","sid":"329825370","bucket":"prev_week","logins_all":35,"logins_player":27,"deps":6,"lvl20":6,"cm1":158.57,"dep_cvr":17.14,"lvl_pct":22.22},{"ms":"adaction5_int","sid":"329825370","bucket":"latest_matured","logins_all":35,"logins_player":30,"deps":9,"lvl20":10,"cm1":117.45,"dep_cvr":25.71,"lvl_pct":33.33},{"ms":"adaction5_int","sid":"329825371","bucket":"prior5_8","logins_all":141,"logins_player":106,"deps":15,"lvl20":17,"cm1":34.02,"dep_cvr":10.64,"lvl_pct":16.04},{"ms":"adaction5_int","sid":"329825371","bucket":"last4","logins_all":84,"logins_player":59,"deps":16,"lvl20":16,"cm1":137.23,"dep_cvr":19.05,"lvl_pct":27.12},{"ms":"adaction5_int","sid":"329825371","bucket":"prev_week","logins_all":17,"logins_player":10,"deps":3,"lvl20":4,"cm1":13.92,"dep_cvr":17.65,"lvl_pct":40.0},{"ms":"adaction5_int","sid":"329825371","bucket":"latest_matured","logins_all":13,"logins_player":10,"deps":3,"lvl20":3,"cm1":9.39,"dep_cvr":23.08,"lvl_pct":30.0},{"ms":"adaction5_int","sid":"329830184","bucket":"prior5_8","logins_all":104,"logins_player":93,"deps":9,"lvl20":7,"cm1":76.54,"dep_cvr":8.65,"lvl_pct":7.53},{"ms":"adaction5_int","sid":"329830184","bucket":"last4","logins_all":121,"logins_player":109,"deps":13,"lvl20":9,"cm1":73.09,"dep_cvr":10.74,"lvl_pct":8.26},{"ms":"adaction5_int","sid":"329830184","bucket":"prev_week","logins_all":2,"logins_player":2,"deps":0,"lvl20":1,"cm1":-0.38,"dep_cvr":0.0,"lvl_pct":50.0},{"ms":"adaction5_int","sid":"329830184","bucket":"latest_matured","logins_all":19,"logins_player":18,"deps":4,"lvl20":2,"cm1":18.28,"dep_cvr":21.05,"lvl_pct":11.11},{"ms":"adaction5_int","sid":"329830666","bucket":"prior5_8","logins_all":1054,"logins_player":984,"deps":186,"lvl20":164,"cm1":1170.72,"dep_cvr":17.65,"lvl_pct":16.67},{"ms":"adaction5_int","sid":"329830666","bucket":"last4","logins_all":1014,"logins_player":938,"deps":177,"lvl20":153,"cm1":1240.23,"dep_cvr":17.46,"lvl_pct":16.31},{"ms":"adaction5_int","sid":"329830666","bucket":"prev_week","logins_all":258,"logins_player":239,"deps":44,"lvl20":39,"cm1":422.87,"dep_cvr":17.05,"lvl_pct":16.32},{"ms":"adaction5_int","sid":"329830666","bucket":"latest_matured","logins_all":288,"logins_player":262,"deps":51,"lvl20":44,"cm1":246.22,"dep_cvr":17.71,"lvl_pct":16.79},{"ms":"adaction5_int","sid":"329831306","bucket":"prior5_8","logins_all":36,"logins_player":34,"deps":11,"lvl20":9,"cm1":6.28,"dep_cvr":30.56,"lvl_pct":26.47},{"ms":"adaction5_int","sid":"329831306","bucket":"last4","logins_all":160,"logins_player":137,"deps":39,"lvl20":34,"cm1":198.78,"dep_cvr":24.38,"lvl_pct":24.82},{"ms":"adaction5_int","sid":"329831306","bucket":"prev_week","logins_all":4,"logins_player":4,"deps":1,"lvl20":1,"cm1":7.69,"dep_cvr":25.0,"lvl_pct":25.0},{"ms":"adaction5_int","sid":"329831306","bucket":"latest_matured","logins_all":75,"logins_player":64,"deps":16,"lvl20":16,"cm1":115.87,"dep_cvr":21.33,"lvl_pct":25.0},{"ms":"adaction5_int","sid":"329831656","bucket":"last4","logins_all":342,"logins_player":301,"deps":28,"lvl20":25,"cm1":101.68,"dep_cvr":8.19,"lvl_pct":8.31},{"ms":"adaction5_int","sid":"329831656","bucket":"prev_week","logins_all":32,"logins_player":26,"deps":2,"lvl20":2,"cm1":-18.94,"dep_cvr":6.25,"lvl_pct":7.69},{"ms":"adaction5_int","sid":"329831656","bucket":"latest_matured","logins_all":310,"logins_player":275,"deps":26,"lvl20":23,"cm1":120.62,"dep_cvr":8.39,"lvl_pct":8.36},{"ms":"adaction5_int","sid":"329832085","bucket":"last4","logins_all":102,"logins_player":92,"deps":12,"lvl20":11,"cm1":59.08,"dep_cvr":11.76,"lvl_pct":11.96},{"ms":"adaction5_int","sid":"329832085","bucket":"prev_week","logins_all":20,"logins_player":18,"deps":3,"lvl20":1,"cm1":14.22,"dep_cvr":15.0,"lvl_pct":5.56},{"ms":"adaction5_int","sid":"329832085","bucket":"latest_matured","logins_all":82,"logins_player":74,"deps":9,"lvl20":10,"cm1":44.85,"dep_cvr":10.98,"lvl_pct":13.51},{"ms":"inboxdollars_int","sid":"Prodege","bucket":"prior5_8","logins_all":352,"logins_player":231,"deps":17,"lvl20":27,"cm1":51.11,"dep_cvr":4.83,"lvl_pct":11.69},{"ms":"inboxdollars_int","sid":"vc-18936","bucket":"prior5_8","logins_all":720,"logins_player":615,"deps":173,"lvl20":143,"cm1":1160.66,"dep_cvr":24.03,"lvl_pct":23.25},{"ms":"inboxdollars_int","sid":"vc-18936","bucket":"last4","logins_all":562,"logins_player":500,"deps":118,"lvl20":111,"cm1":824.55,"dep_cvr":21.0,"lvl_pct":22.2},{"ms":"inboxdollars_int","sid":"vc-18936","bucket":"prev_week","logins_all":148,"logins_player":132,"deps":28,"lvl20":26,"cm1":253.34,"dep_cvr":18.92,"lvl_pct":19.7},{"ms":"inboxdollars_int","sid":"vc-18936","bucket":"latest_matured","logins_all":90,"logins_player":79,"deps":21,"lvl20":18,"cm1":174.9,"dep_cvr":23.33,"lvl_pct":22.78},{"ms":"inboxdollars_int","sid":"vc-19490","bucket":"prior5_8","logins_all":211,"logins_player":174,"deps":57,"lvl20":45,"cm1":96.94,"dep_cvr":27.01,"lvl_pct":25.86},{"ms":"inboxdollars_int","sid":"vc-19490","bucket":"last4","logins_all":141,"logins_player":116,"deps":34,"lvl20":35,"cm1":205.68,"dep_cvr":24.11,"lvl_pct":30.17},{"ms":"inboxdollars_int","sid":"vc-19490","bucket":"prev_week","logins_all":42,"logins_player":33,"deps":12,"lvl20":9,"cm1":23.38,"dep_cvr":28.57,"lvl_pct":27.27},{"ms":"inboxdollars_int","sid":"vc-19490","bucket":"latest_matured","logins_all":24,"logins_player":23,"deps":5,"lvl20":8,"cm1":57.98,"dep_cvr":20.83,"lvl_pct":34.78},{"ms":"inboxdollars_int","sid":"vc-20229","bucket":"prior5_8","logins_all":4984,"logins_player":4548,"deps":535,"lvl20":402,"cm1":2799.58,"dep_cvr":10.73,"lvl_pct":8.84},{"ms":"inboxdollars_int","sid":"vc-20229","bucket":"last4","logins_all":9089,"logins_player":8229,"deps":930,"lvl20":651,"cm1":4762.1,"dep_cvr":10.23,"lvl_pct":7.91},{"ms":"inboxdollars_int","sid":"vc-20229","bucket":"prev_week","logins_all":2782,"logins_player":2515,"deps":281,"lvl20":205,"cm1":1935.05,"dep_cvr":10.1,"lvl_pct":8.15},{"ms":"inboxdollars_int","sid":"vc-20229","bucket":"latest_matured","logins_all":806,"logins_player":748,"deps":111,"lvl20":75,"cm1":322.5,"dep_cvr":13.77,"lvl_pct":10.03},{"ms":"inboxdollars_int","sid":"vc-22482","bucket":"prior5_8","logins_all":939,"logins_player":830,"deps":160,"lvl20":149,"cm1":607.72,"dep_cvr":17.04,"lvl_pct":17.95},{"ms":"inboxdollars_int","sid":"vc-22482","bucket":"last4","logins_all":540,"logins_player":452,"deps":115,"lvl20":100,"cm1":2064.31,"dep_cvr":21.3,"lvl_pct":22.12},{"ms":"inboxdollars_int","sid":"vc-22482","bucket":"prev_week","logins_all":157,"logins_player":133,"deps":34,"lvl20":26,"cm1":800.57,"dep_cvr":21.66,"lvl_pct":19.55},{"ms":"inboxdollars_int","sid":"vc-22482","bucket":"latest_matured","logins_all":71,"logins_player":61,"deps":24,"lvl20":22,"cm1":465.84,"dep_cvr":33.8,"lvl_pct":36.07},{"ms":"inboxdollars_int","sid":"vc-22484","bucket":"prior5_8","logins_all":440,"logins_player":400,"deps":91,"lvl20":73,"cm1":1300.59,"dep_cvr":20.68,"lvl_pct":18.25},{"ms":"inboxdollars_int","sid":"vc-22484","bucket":"last4","logins_all":315,"logins_player":290,"deps":74,"lvl20":70,"cm1":978.9,"dep_cvr":23.49,"lvl_pct":24.14},{"ms":"inboxdollars_int","sid":"vc-22484","bucket":"prev_week","logins_all":94,"logins_player":85,"deps":24,"lvl20":22,"cm1":369.45,"dep_cvr":25.53,"lvl_pct":25.88},{"ms":"inboxdollars_int","sid":"vc-22484","bucket":"latest_matured","logins_all":60,"logins_player":56,"deps":20,"lvl20":17,"cm1":300.82,"dep_cvr":33.33,"lvl_pct":30.36},{"ms":"inboxdollars_int","sid":"vc-2961","bucket":"prior5_8","logins_all":320,"logins_player":245,"deps":43,"lvl20":47,"cm1":-16.32,"dep_cvr":13.44,"lvl_pct":19.18},{"ms":"inboxdollars_int","sid":"vc-2961","bucket":"last4","logins_all":237,"logins_player":205,"deps":64,"lvl20":60,"cm1":546.12,"dep_cvr":27.0,"lvl_pct":29.27},{"ms":"inboxdollars_int","sid":"vc-2961","bucket":"prev_week","logins_all":53,"logins_player":43,"deps":13,"lvl20":16,"cm1":59.57,"dep_cvr":24.53,"lvl_pct":37.21},{"ms":"inboxdollars_int","sid":"vc-2961","bucket":"latest_matured","logins_all":83,"logins_player":76,"deps":19,"lvl20":17,"cm1":98.47,"dep_cvr":22.89,"lvl_pct":22.37},{"ms":"inboxdollars_int","sid":"vc-32188","bucket":"prior5_8","logins_all":1802,"logins_player":1578,"deps":246,"lvl20":154,"cm1":721.55,"dep_cvr":13.65,"lvl_pct":9.76},{"ms":"inboxdollars_int","sid":"vc-32188","bucket":"last4","logins_all":1302,"logins_player":1175,"deps":202,"lvl20":115,"cm1":790.55,"dep_cvr":15.51,"lvl_pct":9.79},{"ms":"inboxdollars_int","sid":"vc-32188","bucket":"prev_week","logins_all":269,"logins_player":239,"deps":34,"lvl20":19,"cm1":103.72,"dep_cvr":12.64,"lvl_pct":7.95},{"ms":"inboxdollars_int","sid":"vc-32188","bucket":"latest_matured","logins_all":97,"logins_player":89,"deps":16,"lvl20":10,"cm1":47.97,"dep_cvr":16.49,"lvl_pct":11.24},{"ms":"inboxdollars_int","sid":"vc-3413","bucket":"prior5_8","logins_all":299,"logins_player":245,"deps":14,"lvl20":16,"cm1":29.53,"dep_cvr":4.68,"lvl_pct":6.53},{"ms":"inboxdollars_int","sid":"vc-3413","bucket":"last4","logins_all":1,"logins_player":1,"deps":0,"lvl20":0,"cm1":0.0,"dep_cvr":0.0,"lvl_pct":0.0},{"ms":"inboxdollars_int","sid":"vc-36668","bucket":"prior5_8","logins_all":115,"logins_player":105,"deps":37,"lvl20":28,"cm1":284.82,"dep_cvr":32.17,"lvl_pct":26.67},{"ms":"inboxdollars_int","sid":"vc-36668","bucket":"last4","logins_all":304,"logins_player":267,"deps":53,"lvl20":44,"cm1":499.81,"dep_cvr":17.43,"lvl_pct":16.48},{"ms":"inboxdollars_int","sid":"vc-36668","bucket":"prev_week","logins_all":87,"logins_player":75,"deps":12,"lvl20":15,"cm1":103.65,"dep_cvr":13.79,"lvl_pct":20.0},{"ms":"inboxdollars_int","sid":"vc-36668","bucket":"latest_matured","logins_all":89,"logins_player":80,"deps":13,"lvl20":9,"cm1":222.36,"dep_cvr":14.61,"lvl_pct":11.25},{"ms":"inboxdollars_int","sid":"vc-36755","bucket":"prior5_8","logins_all":1898,"logins_player":1722,"deps":137,"lvl20":100,"cm1":780.5,"dep_cvr":7.22,"lvl_pct":5.81},{"ms":"inboxdollars_int","sid":"vc-36755","bucket":"last4","logins_all":747,"logins_player":665,"deps":74,"lvl20":55,"cm1":27.62,"dep_cvr":9.91,"lvl_pct":8.27},{"ms":"inboxdollars_int","sid":"vc-36755","bucket":"prev_week","logins_all":51,"logins_player":44,"deps":8,"lvl20":6,"cm1":40.06,"dep_cvr":15.69,"lvl_pct":13.64},{"ms":"inboxdollars_int","sid":"vc-36755","bucket":"latest_matured","logins_all":6,"logins_player":4,"deps":1,"lvl20":0,"cm1":-21.59,"dep_cvr":16.67,"lvl_pct":0.0},{"ms":"myappfre_int","sid":"1318","bucket":"prior5_8","logins_all":39,"logins_player":33,"deps":10,"lvl20":12,"cm1":65.57,"dep_cvr":25.64,"lvl_pct":36.36},{"ms":"myappfre_int","sid":"1318","bucket":"last4","logins_all":141,"logins_player":119,"deps":21,"lvl20":22,"cm1":391.36,"dep_cvr":14.89,"lvl_pct":18.49},{"ms":"myappfre_int","sid":"1318","bucket":"prev_week","logins_all":20,"logins_player":15,"deps":2,"lvl20":2,"cm1":105.07,"dep_cvr":10.0,"lvl_pct":13.33},{"ms":"myappfre_int","sid":"1318","bucket":"latest_matured","logins_all":97,"logins_player":84,"deps":15,"lvl20":16,"cm1":206.36,"dep_cvr":15.46,"lvl_pct":19.05},{"ms":"myappfre_int","sid":"2469","bucket":"prior5_8","logins_all":179,"logins_player":134,"deps":30,"lvl20":25,"cm1":40.16,"dep_cvr":16.76,"lvl_pct":18.66},{"ms":"myappfre_int","sid":"2469","bucket":"last4","logins_all":168,"logins_player":130,"deps":26,"lvl20":24,"cm1":133.58,"dep_cvr":15.48,"lvl_pct":18.46},{"ms":"myappfre_int","sid":"2469","bucket":"prev_week","logins_all":43,"logins_player":33,"deps":11,"lvl20":8,"cm1":45.28,"dep_cvr":25.58,"lvl_pct":24.24},{"ms":"myappfre_int","sid":"2469","bucket":"latest_matured","logins_all":23,"logins_player":19,"deps":2,"lvl20":3,"cm1":8.76,"dep_cvr":8.7,"lvl_pct":15.79},{"ms":"myappfre_int","sid":"3042","bucket":"last4","logins_all":156,"logins_player":138,"deps":18,"lvl20":10,"cm1":432.46,"dep_cvr":11.54,"lvl_pct":7.25},{"ms":"myappfre_int","sid":"3042","bucket":"prev_week","logins_all":16,"logins_player":11,"deps":0,"lvl20":0,"cm1":-0.03,"dep_cvr":0.0,"lvl_pct":0.0},{"ms":"myappfre_int","sid":"3042","bucket":"latest_matured","logins_all":38,"logins_player":36,"deps":3,"lvl20":2,"cm1":35.97,"dep_cvr":7.89,"lvl_pct":5.56},{"ms":"myappfre_int","sid":"3739","bucket":"prior5_8","logins_all":5358,"logins_player":4227,"deps":1335,"lvl20":812,"cm1":4643.12,"dep_cvr":24.92,"lvl_pct":19.21},{"ms":"myappfre_int","sid":"3739","bucket":"last4","logins_all":7618,"logins_player":6319,"deps":1431,"lvl20":846,"cm1":4745.23,"dep_cvr":18.78,"lvl_pct":13.39},{"ms":"myappfre_int","sid":"3739","bucket":"prev_week","logins_all":2193,"logins_player":1842,"deps":395,"lvl20":214,"cm1":1299.41,"dep_cvr":18.01,"lvl_pct":11.62},{"ms":"myappfre_int","sid":"3739","bucket":"latest_matured","logins_all":1336,"logins_player":1128,"deps":258,"lvl20":154,"cm1":1012.26,"dep_cvr":19.31,"lvl_pct":13.65},{"ms":"myappfre_int","sid":"4558","bucket":"prior5_8","logins_all":275,"logins_player":253,"deps":13,"lvl20":14,"cm1":315.84,"dep_cvr":4.73,"lvl_pct":5.53},{"ms":"myappfre_int","sid":"4558","bucket":"last4","logins_all":441,"logins_player":392,"deps":24,"lvl20":15,"cm1":179.66,"dep_cvr":5.44,"lvl_pct":3.83},{"ms":"myappfre_int","sid":"4558","bucket":"prev_week","logins_all":112,"logins_player":94,"deps":11,"lvl20":6,"cm1":177.63,"dep_cvr":9.82,"lvl_pct":6.38},{"ms":"myappfre_int","sid":"4558","bucket":"latest_matured","logins_all":114,"logins_player":104,"deps":7,"lvl20":3,"cm1":9.91,"dep_cvr":6.14,"lvl_pct":2.88},{"ms":"myappfre_int","sid":"4740","bucket":"prior5_8","logins_all":103,"logins_player":83,"deps":11,"lvl20":6,"cm1":-4.58,"dep_cvr":10.68,"lvl_pct":7.23},{"ms":"myappfre_int","sid":"4740","bucket":"last4","logins_all":109,"logins_player":94,"deps":14,"lvl20":13,"cm1":103.77,"dep_cvr":12.84,"lvl_pct":13.83},{"ms":"myappfre_int","sid":"4740","bucket":"prev_week","logins_all":15,"logins_player":13,"deps":3,"lvl20":2,"cm1":24.06,"dep_cvr":20.0,"lvl_pct":15.38},{"ms":"myappfre_int","sid":"4740","bucket":"latest_matured","logins_all":13,"logins_player":11,"deps":1,"lvl20":3,"cm1":40.37,"dep_cvr":7.69,"lvl_pct":27.27}],"campaign_siteid":[{"ms":"adaction5_int","sid":"329830184","cat":"Bingo","bucket":"last4","logins_all":103,"deps":12,"dep_cvr":11.65,"cm1":72.48},{"ms":"adaction5_int","sid":"329830184","cat":"Bingo","bucket":"prior5_8","logins_all":96,"deps":9,"dep_cvr":9.38,"cm1":77.83},{"ms":"adaction5_int","sid":"329830184","cat":"Solitaire","bucket":"last4","logins_all":18,"deps":1,"dep_cvr":5.56,"cm1":0.61},{"ms":"adaction5_int","sid":"329830184","cat":"Solitaire","bucket":"prior5_8","logins_all":8,"deps":0,"dep_cvr":0.0,"cm1":-1.3},{"ms":"adaction5_int","sid":"329831656","cat":"Bingo","bucket":"last4","logins_all":63,"deps":7,"dep_cvr":11.11,"cm1":-9.76},{"ms":"adaction5_int","sid":"329831656","cat":"Solitaire","bucket":"last4","logins_all":279,"deps":21,"dep_cvr":7.53,"cm1":111.44},{"ms":"inboxdollars_int","sid":"vc-20229","cat":"Bingo","bucket":"last4","logins_all":4669,"deps":456,"dep_cvr":9.77,"cm1":3160.36},{"ms":"inboxdollars_int","sid":"vc-20229","cat":"Bingo","bucket":"prior5_8","logins_all":2811,"deps":282,"dep_cvr":10.03,"cm1":1658.6},{"ms":"inboxdollars_int","sid":"vc-20229","cat":"GinRummy","bucket":"last4","logins_all":432,"deps":50,"dep_cvr":11.57,"cm1":227.86},{"ms":"inboxdollars_int","sid":"vc-20229","cat":"GinRummy","bucket":"prior5_8","logins_all":125,"deps":27,"dep_cvr":21.6,"cm1":78.98},{"ms":"inboxdollars_int","sid":"vc-20229","cat":"Solitaire","bucket":"last4","logins_all":3988,"deps":424,"dep_cvr":10.63,"cm1":1373.88},{"ms":"inboxdollars_int","sid":"vc-20229","cat":"Solitaire","bucket":"prior5_8","logins_all":2048,"deps":226,"dep_cvr":11.04,"cm1":1062.0},{"ms":"inboxdollars_int","sid":"vc-36755","cat":"Bingo","bucket":"last4","logins_all":258,"deps":25,"dep_cvr":9.69,"cm1":34.18},{"ms":"inboxdollars_int","sid":"vc-36755","cat":"Bingo","bucket":"prior5_8","logins_all":487,"deps":33,"dep_cvr":6.78,"cm1":81.36},{"ms":"inboxdollars_int","sid":"vc-36755","cat":"Solitaire","bucket":"last4","logins_all":489,"deps":49,"dep_cvr":10.02,"cm1":-6.55},{"ms":"inboxdollars_int","sid":"vc-36755","cat":"Solitaire","bucket":"prior5_8","logins_all":1411,"deps":104,"dep_cvr":7.37,"cm1":699.14},{"ms":"myappfre_int","sid":"1318","cat":"Bingo","bucket":"last4","logins_all":89,"deps":11,"dep_cvr":12.36,"cm1":180.96},{"ms":"myappfre_int","sid":"1318","cat":"Bingo","bucket":"prior5_8","logins_all":39,"deps":10,"dep_cvr":25.64,"cm1":65.57},{"ms":"myappfre_int","sid":"1318","cat":"Solitaire","bucket":"last4","logins_all":52,"deps":10,"dep_cvr":19.23,"cm1":210.4},{"ms":"myappfre_int","sid":"3042","cat":"Solitaire","bucket":"last4","logins_all":156,"deps":18,"dep_cvr":11.54,"cm1":432.46},{"ms":"myappfre_int","sid":"3739","cat":"Bingo","bucket":"last4","logins_all":442,"deps":113,"dep_cvr":25.57,"cm1":823.41},{"ms":"myappfre_int","sid":"3739","cat":"Bingo","bucket":"prior5_8","logins_all":425,"deps":149,"dep_cvr":35.06,"cm1":750.39},{"ms":"myappfre_int","sid":"3739","cat":"GinRummy","bucket":"last4","logins_all":2223,"deps":441,"dep_cvr":19.84,"cm1":1935.04},{"ms":"myappfre_int","sid":"3739","cat":"GinRummy","bucket":"prior5_8","logins_all":2274,"deps":586,"dep_cvr":25.77,"cm1":2220.11},{"ms":"myappfre_int","sid":"3739","cat":"Solitaire","bucket":"last4","logins_all":4953,"deps":877,"dep_cvr":17.71,"cm1":1986.79},{"ms":"myappfre_int","sid":"3739","cat":"Solitaire","bucket":"prior5_8","logins_all":2659,"deps":600,"dep_cvr":22.56,"cm1":1672.63},{"ms":"myappfre_int","sid":"4558","cat":"Solitaire","bucket":"last4","logins_all":441,"deps":24,"dep_cvr":5.44,"cm1":179.66},{"ms":"myappfre_int","sid":"4558","cat":"Solitaire","bucket":"prior5_8","logins_all":275,"deps":13,"dep_cvr":4.73,"cm1":315.84}]}</script>
+<script>(function(){
+"use strict";
+const DATA = JSON.parse(document.getElementById("raw-data").textContent);
+const CW = DATA.channel_week, PW = DATA.platform_week, BS = DATA.bucket_summary, PB = DATA.platform_bucket;
+const SW = DATA.siteid_week, SB = DATA.siteid_bucket, CS = DATA.campaign_siteid;
+
+const COLORS = {
+  inboxdollars_int: "#D64545", myappfre_int: "#E8A33D", adaction5_int: "#5B7FDB",
+  freecash_int: "#4AAB7E", kashkick_int: "#9B59B6", platform: "#787569"
+};
+const NAMES = {
+  inboxdollars_int: "InboxDollars", myappfre_int: "MyAppFree", adaction5_int: "AdAction",
+  freecash_int: "FreeCash", kashkick_int: "KashKick"
+};
+const WEEKS = ["2026-04-20","2026-04-27","2026-05-04","2026-05-11","2026-05-18","2026-05-25",
+  "2026-06-01","2026-06-08","2026-06-15","2026-06-22","2026-06-29","2026-07-06","2026-07-13","2026-07-20"];
+const MATURED_WEEKS = WEEKS.slice(0, 12); // through 2026-07-06
+const PARTIAL_WEEKS = ["2026-07-13","2026-07-20"];
+const CHANNELS = ["inboxdollars_int","myappfre_int","adaction5_int","freecash_int"];
+const BUCKET_ORDER = ["prior5_8","last4"];
+
+function fmtWeek(w){
+  const d = new Date(w+"T00:00:00Z");
+  return d.toLocaleDateString("en-US",{month:"short",day:"numeric",timeZone:"UTC"});
+}
+function fmtNum(n){ if(n===null||n===undefined||isNaN(n)) return "—"; return Math.round(n).toLocaleString("en-US"); }
+function fmtMoney(n){ if(n===null||n===undefined) return "—"; return "$"+Math.round(n).toLocaleString("en-US"); }
+function fmtPct(n,d){ if(n===null||n===undefined||isNaN(n)) return "—"; return n.toFixed(d===undefined?1:d)+"%"; }
+function pctDelta(a,b){ if(a===null||b===null||a===undefined||b===undefined) return null; return a-b; }
+function deltaSpan(delta, invert){
+  if(delta===null||delta===undefined||isNaN(delta)) return '<span class="delta flat">—</span>';
+  const good = invert ? delta<0 : delta>0;
+  const cls = Math.abs(delta)<0.05 ? "flat" : (good?"up":"down");
+  const sign = delta>0?"+":"";
+  return `<span class="delta ${cls}">${sign}${delta.toFixed(1)}pp</span>`;
+}
+function roasCellClass(r){
+  if(r===null||r===undefined||isNaN(r)) return "";
+  if(r>=30) return "cell-good"; if(r>=10) return "cell-warn"; return "cell-bad";
+}
+
+// ---------- SVG chart helpers ----------
+const NS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs){
+  const e = document.createElementNS(NS, tag);
+  for(const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+function clear(el){ while(el.firstChild) el.removeChild(el.firstChild); }
+
+function niceMax(v){
+  if(v<=0) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  const n = v/p;
+  let m;
+  if(n<=1) m=1; else if(n<=2) m=2; else if(n<=5) m=5; else m=10;
+  return m*p;
+}
+
+// Multi-series line chart with optional dashed benchmark series, hover crosshair+tooltip
+function lineChart(container, weeks, seriesList, opts){
+  opts = opts||{};
+  clear(container);
+  const W = 860, H = opts.height||300, padL=40, padR=14, padT=14, padB=28;
+  const plotW = W-padL-padR, plotH = H-padT-padB;
+  const svg = svgEl("svg",{viewBox:`0 0 ${W} ${H}`, preserveAspectRatio:"xMinYMin meet"});
+  container.appendChild(svg);
+
+  const partialIdx = weeks.map((w,i)=> PARTIAL_WEEKS.includes(w) ? i : -1).filter(i=>i>=0);
+  let maxV = 0, minV = opts.allowNegative? 0 : 0;
+  seriesList.forEach(s=> s.values.forEach(v=>{ if(v!==null && v!==undefined){ if(v>maxV) maxV=v; if(opts.allowNegative && v<minV) minV=v; }}));
+  maxV = opts.fixedMax || niceMax(maxV*1.12);
+  const yMin = minV;
+  const x = i => padL + (i/(weeks.length-1))*plotW;
+  const y = v => padT + plotH - ((v - yMin)/(maxV-yMin))*plotH;
+
+  // partial week shading
+  partialIdx.forEach(i=>{
+    if(i===0) return;
+    const x0 = x(i-0.5), x1=x(i+0.5);
+    svg.appendChild(svgEl("rect",{x:x0,y:padT,width:Math.max(0,x1-x0),height:plotH,fill:"currentColor",opacity:0.05}));
+  });
+
+  // gridlines + y labels
+  const ticks = 4;
+  for(let t=0;t<=ticks;t++){
+    const v = yMin + (maxV-yMin)*t/ticks;
+    const yy = y(v);
+    svg.appendChild(svgEl("line",{x1:padL,x2:W-padR,y1:yy,y2:yy,class:"gridline"}));
+    const lbl = svgEl("text",{x:padL-6,y:yy+3,"text-anchor":"end",class:"axis"});
+    lbl.textContent = opts.yFmt ? opts.yFmt(v) : Math.round(v);
+    svg.appendChild(lbl);
+  }
+  // x labels (every other week)
+  weeks.forEach((w,i)=>{
+    if(i%2!==0 && weeks.length>8) return;
+    const t = svgEl("text",{x:x(i),y:H-8,"text-anchor":"middle",class:"axis"});
+    t.textContent = fmtWeek(w);
+    svg.appendChild(t);
+  });
+
+  function pathFor(values, dashed){
+    let d = "";
+    values.forEach((v,i)=>{
+      if(v===null||v===undefined) return;
+      d += (d===""?"M":"L") + x(i).toFixed(1) + "," + y(v).toFixed(1) + " ";
+    });
+    return d;
+  }
+
+  seriesList.forEach(s=>{
+    const path = svgEl("path",{d:pathFor(s.values), fill:"none", stroke:s.color, "stroke-width":s.dashed?2:2.25,
+      "stroke-linecap":"round","stroke-linejoin":"round"});
+    if(s.dashed) path.setAttribute("stroke-dasharray","5,4");
+    svg.appendChild(path);
+    s.values.forEach((v,i)=>{
+      if(v===null||v===undefined) return;
+      if(PARTIAL_WEEKS.includes(weeks[i]) && !opts.showPartialDots) return;
+      svg.appendChild(svgEl("circle",{cx:x(i),cy:y(v),r:2.6,fill:s.color}));
+    });
+  });
+
+  // hover
+  const hoverLine = svgEl("line",{x1:0,x2:0,y1:padT,y2:padT+plotH,stroke:"currentColor",opacity:0,"stroke-width":1});
+  svg.appendChild(hoverLine);
+  const hitRect = svgEl("rect",{x:padL,y:padT,width:plotW,height:plotH,fill:"transparent"});
+  svg.appendChild(hitRect);
+  const tooltip = document.getElementById("tooltip");
+  hitRect.addEventListener("mousemove", (e)=>{
+    const rect = svg.getBoundingClientRect();
+    const px = (e.clientX-rect.left)/rect.width*W;
+    let i = Math.round((px-padL)/plotW*(weeks.length-1));
+    i = Math.max(0, Math.min(weeks.length-1, i));
+    hoverLine.setAttribute("x1", x(i)); hoverLine.setAttribute("x2", x(i)); hoverLine.setAttribute("opacity",0.35);
+    let lines = `<b>${fmtWeek(weeks[i])}${PARTIAL_WEEKS.includes(weeks[i])?' (partial)':''}</b><br>`;
+    seriesList.forEach(s=>{
+      const v = s.values[i];
+      lines += `${s.name}: ${v===null||v===undefined?"—":(opts.tipFmt? opts.tipFmt(v): v.toFixed(1))}<br>`;
+    });
+    tooltip.innerHTML = lines;
+    tooltip.style.left = (rect.left+x(i))+"px";
+    tooltip.style.top = (rect.top+y(seriesList[0].values[i]||yMin))+"px";
+    tooltip.style.opacity = 1;
+  });
+  hitRect.addEventListener("mouseleave", ()=>{ hoverLine.setAttribute("opacity",0); tooltip.style.opacity=0; });
+}
+
+function stackedBarChart(container, weeks, series, opts){
+  opts = opts||{};
+  clear(container);
+  const W=860,H=opts.height||280,padL=48,padR=14,padT=14,padB=28;
+  const plotW=W-padL-padR, plotH=H-padT-padB;
+  const svg = svgEl("svg",{viewBox:`0 0 ${W} ${H}`, preserveAspectRatio:"xMinYMin meet"});
+  container.appendChild(svg);
+  const totals = weeks.map((w,i)=> series.reduce((a,s)=>a+(s.values[i]||0),0));
+  const maxV = niceMax(Math.max(...totals)*1.12);
+  const bw = plotW/weeks.length*0.62;
+  const x = i => padL + (i+0.5)/weeks.length*plotW;
+  const y = v => padT + plotH - (v/maxV)*plotH;
+  const ticks=4;
+  for(let t=0;t<=ticks;t++){
+    const v=maxV*t/ticks, yy=y(v);
+    svg.appendChild(svgEl("line",{x1:padL,x2:W-padR,y1:yy,y2:yy,class:"gridline"}));
+    const lbl=svgEl("text",{x:padL-6,y:yy+3,"text-anchor":"end",class:"axis"});
+    lbl.textContent = "$"+Math.round(v/1000)+"k";
+    svg.appendChild(lbl);
+  }
+  weeks.forEach((w,i)=>{
+    if(i%2!==0 && weeks.length>8) return;
+    const t=svgEl("text",{x:x(i),y:H-8,"text-anchor":"middle",class:"axis"});
+    t.textContent = fmtWeek(w);
+    svg.appendChild(t);
+  });
+  const tooltip = document.getElementById("tooltip");
+  weeks.forEach((w,i)=>{
+    let acc=0;
+    const partial = PARTIAL_WEEKS.includes(w);
+    series.forEach(s=>{
+      const v = s.values[i]||0;
+      if(v<=0) return;
+      const y0=y(acc), y1=y(acc+v);
+      const rect = svgEl("rect",{x:x(i)-bw/2,y:y1,width:bw,height:Math.max(0,y0-y1),fill:s.color,opacity:partial?0.45:1,rx:1.5});
+      svg.appendChild(rect);
+      acc += v;
+    });
+    // hover hit area per week
+    const hit = svgEl("rect",{x:x(i)-bw/2-2,y:padT,width:bw+4,height:plotH,fill:"transparent"});
+    hit.addEventListener("mousemove",(e)=>{
+      const rect = svg.getBoundingClientRect();
+      let lines = `<b>${fmtWeek(w)}${partial?' (partial)':''}</b><br>`;
+      series.forEach(s=>{ if((s.values[i]||0)>0) lines += `${s.name}: $${Math.round(s.values[i]).toLocaleString()}<br>`; });
+      lines += `<b>Total: $${Math.round(acc).toLocaleString()}</b>`;
+      tooltip.innerHTML = lines;
+      tooltip.style.left=(rect.left+x(i))+"px"; tooltip.style.top=(rect.top+y(acc))+"px"; tooltip.style.opacity=1;
+    });
+    hit.addEventListener("mouseleave",()=>{tooltip.style.opacity=0;});
+    svg.appendChild(hit);
+  });
+}
+
+function legendRow(container, items){
+  clear(container);
+  items.forEach(it=>{
+    const span = document.createElement("span");
+    const i = document.createElement("i");
+    i.className = it.dashed? "dash":"";
+    i.style.background = it.dashed? "none":it.color;
+    i.style.color = it.color;
+    if(!it.dashed){ i.style.width="11px"; i.style.height="11px"; }
+    span.appendChild(i);
+    span.appendChild(document.createTextNode(" "+it.name));
+    container.appendChild(span);
+  });
+}
+
+// ---------- data helpers ----------
+function channelWeekSeries(ms, weeks, field, catFilter){
+  return weeks.map(w=>{
+    const rows = CW.filter(r=> r.ms===ms && r.week===w && (!catFilter || catFilter==="Overall" || r.cat===catFilter));
+    if(rows.length===0) return null;
+    if(field==="spend"||field==="cm1"||field==="logins_all"||field==="logins_player"||field==="deps"||field==="lvl20"){
+      return rows.reduce((a,r)=>a+r[field],0);
+    }
+    // weighted recompute for rates when aggregating categories
+    const la = rows.reduce((a,r)=>a+r.logins_all,0);
+    const lp = rows.reduce((a,r)=>a+r.logins_player,0);
+    const dep = rows.reduce((a,r)=>a+r.deps,0);
+    const lvl = rows.reduce((a,r)=>a+r.lvl20,0);
+    const sp = rows.reduce((a,r)=>a+r.spend,0);
+    const cm1 = rows.reduce((a,r)=>a+r.cm1,0);
+    if(field==="dep_cvr") return la>0? 100*dep/la : null;
+    if(field==="lvl_pct") return lp>0? 100*lvl/lp : null;
+    if(field==="roas") return sp>0? 100*cm1/sp : null;
+    return null;
+  });
+}
+function bucketRow(ms, bucket){ return BS.find(r=>r.ms===ms && r.bucket===bucket); }
+function platBucket(bucket){ return PB.find(r=>r.bucket===bucket); }
+
+// ---------- Executive scorecards ----------
+function verdictFor(ms){
+  const l4 = bucketRow(ms,"last4"), p58 = bucketRow(ms,"prior5_8");
+  if(!l4 || !p58 || l4.logins_all<50) return {label:"n/a — low volume", cls:"hold"};
+  const spendDelta = l4.spend - p58.spend;
+  const cvrDelta = (l4.dep_cvr||0) - (p58.dep_cvr||0);
+  const lvlDelta = (l4.lvl_pct||0) - (p58.lvl_pct||0);
+  const qualityUp = cvrDelta>0.3 && lvlDelta>0.3;
+  const qualityDown = cvrDelta<-0.3 && lvlDelta<-0.3;
+  const spendUp = spendDelta > p58.spend*0.08;
+  const spendDown = spendDelta < -p58.spend*0.08;
+  if(spendUp && qualityDown) return {label:"scale down", cls:"scaledown"};
+  if(spendDown && qualityUp) return {label:"scale up (selectively)", cls:"scaleup"};
+  if(!spendUp && !spendDown && qualityDown) return {label:"mix-shift — investigate", cls:"watch"};
+  if(spendUp && !qualityDown) return {label:"hold — monitor", cls:"hold"};
+  if(spendDown && !qualityUp) return {label:"hold — monitor", cls:"hold"};
+  return {label:"hold — stable", cls:"hold"};
+}
+
+function buildScorecards(){
+  const wrap = document.getElementById("scorecards");
+  clear(wrap);
+  CHANNELS.concat(["kashkick_int"]).forEach(ms=>{
+    const l4 = bucketRow(ms,"last4"), p58 = bucketRow(ms,"prior5_8");
+    const card = document.createElement("div"); card.className="card";
+    const head = document.createElement("div"); head.className="ch";
+    head.innerHTML = `<span class="dot" style="background:${COLORS[ms]}"></span><span class="chname">${NAMES[ms]}</span>`;
+    if(ms==="kashkick_int"){
+      head.innerHTML += `<span class="badge hold">inactive</span>`;
+      card.appendChild(head);
+      const p = document.createElement("div"); p.className="row"; p.innerHTML="<span>Zero spend & logins, entire window</span>";
+      card.appendChild(p);
+      wrap.appendChild(card);
+      return;
+    }
+    const v = verdictFor(ms);
+    head.innerHTML += `<span class="badge ${v.cls}">${v.label}</span>`;
+    card.appendChild(head);
+    function row(label, a, b, fmt, deltaFmt){
+      const d = document.createElement("div"); d.className="row";
+      const delta = (a!==null&&b!==null&&a!==undefined&&b!==undefined)? a-b : null;
+      d.innerHTML = `<span>${label}</span><span><b>${fmt(a)}</b> ${deltaFmt(delta)}</span>`;
+      return d;
+    }
+    function moneyDelta(delta){
+      if(delta===null||delta===undefined||isNaN(delta)) return '<span class="delta flat">—</span>';
+      const cls = Math.abs(delta)<1 ? "flat" : (delta>0?"up":"down");
+      const sign = delta>0?"+":"";
+      return `<span class="delta ${cls}">${sign}${fmtMoney(delta)}</span>`;
+    }
+    card.appendChild(row("Spend (last4)", l4.spend, p58.spend, fmtMoney, moneyDelta));
+    card.appendChild(row("Dep CVR", l4.dep_cvr, p58.dep_cvr, v=>fmtPct(v,1), d=>deltaSpan(d)));
+    card.appendChild(row("Lvl 21+ %", l4.lvl_pct, p58.lvl_pct, v=>fmtPct(v,1), d=>deltaSpan(d)));
+    card.appendChild(row("D7 ROAS", l4.roas, p58.roas, v=>fmtPct(v,1), d=>deltaSpan(d)));
+    wrap.appendChild(card);
+  });
+}
+
+// ---------- Comparison tables ----------
+function buildCompareTable(tblId, bucketA, bucketB, labelA, labelB){
+  const tbl = document.getElementById(tblId);
+  clear(tbl);
+  const thead = document.createElement("thead");
+  thead.innerHTML = `<tr><th>Channel</th><th>Spend ${labelA}</th><th>Spend ${labelB}</th><th>Δ Spend</th>
+    <th>Dep CVR ${labelA}</th><th>Dep CVR ${labelB}</th><th>Δ pp</th>
+    <th>Lvl21+ ${labelA}</th><th>Lvl21+ ${labelB}</th><th>Δ pp</th>
+    <th>ROAS ${labelA}</th><th>ROAS ${labelB}</th></tr>`;
+  tbl.appendChild(thead);
+  const tbody = document.createElement("tbody");
+  const rows = [{ms:"platform_all", row: {a:platBucket(bucketA), b:platBucket(bucketB)}, label:"Platform (benchmark)"}]
+    .concat(CHANNELS.map(ms=>({ms, row:{a:bucketRow(ms,bucketA), b:bucketRow(ms,bucketB)}, label:NAMES[ms]})));
+  rows.forEach(r=>{
+    const a=r.row.a, b=r.row.b;
+    if(!a||!b) return;
+    const spendDelta = a.spend-b.spend;
+    const cvrDelta = (a.dep_cvr!==null&&b.dep_cvr!==null)? a.dep_cvr-b.dep_cvr: null;
+    const lvlDelta = (a.lvl_pct!==null&&b.lvl_pct!==null)? a.lvl_pct-b.lvl_pct: null;
+    const tr = document.createElement("tr");
+    if(r.ms==="platform_all") tr.style.fontStyle="italic";
+    tr.innerHTML = `<td>${r.label}</td>
+      <td>${fmtMoney(a.spend)}</td><td>${fmtMoney(b.spend)}</td>
+      <td class="${spendDelta>0?'up':'down'}">${spendDelta>=0?'+':''}${fmtMoney(spendDelta)}</td>
+      <td>${fmtPct(a.dep_cvr)}</td><td>${fmtPct(b.dep_cvr)}</td>
+      <td>${deltaSpan(cvrDelta)}</td>
+      <td>${fmtPct(a.lvl_pct)}</td><td>${fmtPct(b.lvl_pct)}</td>
+      <td>${deltaSpan(lvlDelta)}</td>
+      <td class="${roasCellClass(a.roas)}">${fmtPct(a.roas)}</td><td class="${roasCellClass(b.roas)}">${fmtPct(b.roas)}</td>`;
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+}
+
+// ---------- Panel I: spend ----------
+function buildSpendPanel(){
+  const weeks = WEEKS;
+  const series = CHANNELS.map(ms=>({name:NAMES[ms], color:COLORS[ms], values: channelWeekSeries(ms, weeks, "spend")}));
+  legendRow(document.getElementById("legend-spend"), CHANNELS.map(ms=>({name:NAMES[ms],color:COLORS[ms]})));
+  stackedBarChart(document.getElementById("chart-spend"), weeks, series);
+}
+
+// ---------- Panel II ----------
+const CHART_CHANNELS = ["inboxdollars_int","myappfre_int","adaction5_int"]; // freecash excluded: near-zero volume makes its rate wildly volatile and distorts the shared axis
+function buildQualityPanels(){
+  const weeks = WEEKS;
+  const depSeries = CHART_CHANNELS.map(ms=>({name:NAMES[ms], color:COLORS[ms], values: channelWeekSeries(ms, weeks, "dep_cvr")}));
+  depSeries.push({name:"Platform", color:COLORS.platform, dashed:true, values: weeks.map(w=>{const r=PW.find(x=>x.week===w); return r?r.dep_cvr:null;})});
+  legendRow(document.getElementById("legend-depcvr"), depSeries.map(s=>({name:s.name,color:s.color,dashed:s.dashed})));
+  lineChart(document.getElementById("chart-depcvr"), weeks, depSeries, {yFmt:v=>v.toFixed(0)+"%", tipFmt:v=>v.toFixed(1)+"%", fixedMax:35});
+
+  const lvlSeries = CHART_CHANNELS.map(ms=>({name:NAMES[ms], color:COLORS[ms], values: channelWeekSeries(ms, weeks, "lvl_pct")}));
+  lvlSeries.push({name:"Platform", color:COLORS.platform, dashed:true, values: weeks.map(w=>{const r=PW.find(x=>x.week===w); return r?r.lvl_pct:null;})});
+  legendRow(document.getElementById("legend-lvl"), lvlSeries.map(s=>({name:s.name,color:s.color,dashed:s.dashed})));
+  lineChart(document.getElementById("chart-lvl"), weeks, lvlSeries, {yFmt:v=>v.toFixed(0)+"%", tipFmt:v=>v.toFixed(1)+"%", fixedMax:35});
+}
+
+// ---------- Panel III: deep dive ----------
+let currentChannel = "inboxdollars_int";
+function buildChipSelector(){
+  const wrap = document.getElementById("chip-channels");
+  clear(wrap);
+  CHANNELS.forEach(ms=>{
+    const chip = document.createElement("button");
+    chip.className = "chip"+(ms===currentChannel?" active":"");
+    chip.textContent = NAMES[ms];
+    chip.style.borderColor = COLORS[ms];
+    chip.style.background = ms===currentChannel? COLORS[ms] : "";
+    chip.style.color = ms===currentChannel? "#fff" : COLORS[ms];
+    chip.addEventListener("click", ()=>{ currentChannel = ms; buildChipSelector(); buildDeepDive(); });
+    wrap.appendChild(chip);
+  });
+}
+function buildDeepDive(){
+  const weeks = WEEKS;
+  const cat = document.getElementById("sel-category").value;
+  const ms = currentChannel;
+  const spend = channelWeekSeries(ms, weeks, "spend", cat);
+  const depcvr = channelWeekSeries(ms, weeks, "dep_cvr", cat);
+  const lvl = channelWeekSeries(ms, weeks, "lvl_pct", cat);
+  const roas = channelWeekSeries(ms, weeks, "roas", cat);
+
+  clear(document.getElementById("chart-deepdive"));
+  const W=860,H=320,padL=48,padR=48,padT=14,padB=28;
+  const plotW=W-padL-padR, plotH=H-padT-padB;
+  const svg = svgEl("svg",{viewBox:`0 0 ${W} ${H}`, preserveAspectRatio:"xMinYMin meet"});
+  document.getElementById("chart-deepdive").appendChild(svg);
+  const maxSpend = niceMax(Math.max(...spend.filter(v=>v!==null),1)*1.15);
+  const maxPct = niceMax(Math.max(...depcvr.concat(lvl).filter(v=>v!==null),1)*1.25);
+  const x = i => padL + (i/(weeks.length-1))*plotW;
+  const yS = v => padT+plotH - (v/maxSpend)*plotH;
+  const yP = v => padT+plotH - (v/maxPct)*plotH;
+  const bw = plotW/weeks.length*0.55;
+
+  // gridlines (left axis = spend)
+  for(let t=0;t<=4;t++){
+    const v=maxSpend*t/4, yy=yS(v);
+    svg.appendChild(svgEl("line",{x1:padL,x2:W-padR,y1:yy,y2:yy,class:"gridline"}));
+    const lbl=svgEl("text",{x:padL-6,y:yy+3,"text-anchor":"end",class:"axis"}); lbl.textContent="$"+Math.round(v/1000)+"k";
+    svg.appendChild(lbl);
+  }
+  for(let t=0;t<=4;t++){
+    const v=maxPct*t/4, yy=yP(v);
+    const lbl=svgEl("text",{x:W-padR+6,y:yy+3,"text-anchor":"start",class:"axis"}); lbl.textContent=Math.round(v)+"%";
+    svg.appendChild(lbl);
+  }
+  weeks.forEach((w,i)=>{
+    if(i%2!==0 && weeks.length>8) return;
+    const t=svgEl("text",{x:x(i),y:H-8,"text-anchor":"middle",class:"axis"}); t.textContent=fmtWeek(w);
+    svg.appendChild(t);
+  });
+  // spend bars
+  spend.forEach((v,i)=>{
+    if(v===null||v===0) return;
+    const partial = PARTIAL_WEEKS.includes(weeks[i]);
+    svg.appendChild(svgEl("rect",{x:x(i)-bw/2,y:yS(v),width:bw,height:plotH+padT-yS(v),fill:COLORS[ms],opacity:partial?0.18:0.28,rx:1.5}));
+  });
+  function linePath(values, yFn){
+    let d="";
+    values.forEach((v,i)=>{ if(v===null||v===undefined) return; d+=(d===""?"M":"L")+x(i).toFixed(1)+","+yFn(v).toFixed(1)+" "; });
+    return d;
+  }
+  const pDep = svgEl("path",{d:linePath(depcvr,yP), fill:"none", stroke:COLORS[ms], "stroke-width":2.5});
+  svg.appendChild(pDep);
+  depcvr.forEach((v,i)=>{ if(v!==null) svg.appendChild(svgEl("circle",{cx:x(i),cy:yP(v),r:2.6,fill:COLORS[ms]})); });
+  const pLvl = svgEl("path",{d:linePath(lvl,yP), fill:"none", stroke:COLORS[ms], "stroke-width":2.5, "stroke-dasharray":"1,4","stroke-linecap":"round"});
+  svg.appendChild(pLvl);
+  lvl.forEach((v,i)=>{ if(v!==null) svg.appendChild(svgEl("circle",{cx:x(i),cy:yP(v),r:2.2,fill:"none",stroke:COLORS[ms],"stroke-width":1.6})); });
+  const pRoas = svgEl("path",{d:linePath(roas,yP), fill:"none", stroke:"var(--ink2)".replace('var(--ink2)','#8a8781'), "stroke-width":1.8, "stroke-dasharray":"6,3"});
+  svg.appendChild(pRoas);
+
+  legendRow(document.getElementById("legend-deepdive"), [
+    {name:"Spend (bars, left-ish/$ scale)", color:COLORS[ms]},
+    {name:"Dep CVR (solid line, %)", color:COLORS[ms]},
+    {name:"Lvl 21+ % (dotted line, %)", color:COLORS[ms], dashed:true},
+    {name:"D7 ROAS (dashed grey, %)", color:"#8a8781", dashed:true},
+  ]);
+
+  const hitRect = svgEl("rect",{x:padL,y:padT,width:plotW,height:plotH,fill:"transparent"});
+  svg.appendChild(hitRect);
+  const tooltip = document.getElementById("tooltip");
+  hitRect.addEventListener("mousemove",(e)=>{
+    const rect = svg.getBoundingClientRect();
+    const px=(e.clientX-rect.left)/rect.width*W;
+    let i = Math.round((px-padL)/plotW*(weeks.length-1));
+    i = Math.max(0,Math.min(weeks.length-1,i));
+    let lines = `<b>${fmtWeek(weeks[i])}</b><br>Spend: ${fmtMoney(spend[i])}<br>Dep CVR: ${fmtPct(depcvr[i])}<br>Lvl21+: ${fmtPct(lvl[i])}<br>ROAS: ${fmtPct(roas[i])}`;
+    tooltip.innerHTML = lines;
+    tooltip.style.left=(rect.left+x(i))+"px"; tooltip.style.top=(rect.top+padT+20)+"px"; tooltip.style.opacity=1;
+  });
+  hitRect.addEventListener("mouseleave",()=>{tooltip.style.opacity=0;});
+}
+
+// ---------- Panel IV: siteid drilldown ----------
+function eligibleSiteids(ms){
+  const totals = {};
+  SB.filter(r=>r.ms===ms).forEach(r=>{ totals[r.sid]=(totals[r.sid]||0)+r.logins_all; });
+  return Object.keys(totals).filter(sid=>totals[sid]>=200).sort((a,b)=>totals[b]-totals[a]);
+}
+const SID_PALETTE = ["#2f5fa8","#c8392a","#2f8f5b","#b8860b","#7d5ba6","#3f8f9c","#c4562f","#5a6b8c","#9c5a7d","#587a3f","#a34848","#4f7c99","#8a6a3f","#6a4f8a"];
+function buildSiteidPanel(){
+  const ms = document.getElementById("sel-sid-channel").value;
+  const metric = document.getElementById("sel-sid-metric").value;
+  const sids = eligibleSiteids(ms);
+  const weeks = WEEKS;
+  const series = sids.map((sid,idx)=>{
+    const values = weeks.map(w=>{
+      const r = SW.find(x=>x.ms===ms && x.sid===sid && x.week===w);
+      return r ? r[metric] : null;
+    });
+    return {name: sid, color: SID_PALETTE[idx%SID_PALETTE.length], values};
+  });
+  legendRow(document.getElementById("legend-sid"), series.map(s=>({name:s.name,color:s.color})));
+  const fmt = metric==="logins_all"? (v=>Math.round(v)) : (v=>v.toFixed(0)+"%");
+  const tipfmt = metric==="logins_all"? (v=>Math.round(v).toLocaleString()) : (v=>v.toFixed(1)+"%");
+  lineChart(document.getElementById("chart-sid"), weeks, series, {yFmt:fmt, tipFmt:tipfmt, height:340});
+}
+
+// ---------- SiteID recommendation table ----------
+function siteidVerdict(row_l4, row_p58, channelAvgL4, volShare){
+  if(!row_l4) return {v:"churned", cls:"scaledown"};
+  const volDelta = row_p58 ? row_l4.logins_all - row_p58.logins_all : row_l4.logins_all;
+  const cvr = row_l4.dep_cvr, lvl = row_l4.lvl_pct;
+  const aboveAvg = (cvr!==null && cvr > channelAvgL4.dep_cvr*1.1) && (lvl!==null && lvl > channelAvgL4.lvl_pct*1.1);
+  const belowAvg = (cvr!==null && cvr < channelAvgL4.dep_cvr*0.75) && (lvl!==null && lvl < channelAvgL4.lvl_pct*0.75);
+  const laggingButDominant = volShare>0.4 && (cvr!==null && cvr < channelAvgL4.dep_cvr) && (lvl!==null && lvl < channelAvgL4.lvl_pct) && !belowAvg;
+  if(belowAvg && volDelta>=0) return {v:"scale down / cap", cls:"verdict-scaledown"};
+  if(belowAvg) return {v:"low quality — hold", cls:"verdict-hold"};
+  if(laggingButDominant && volDelta>0) return {v:"dominant & lagging — cap, diversify", cls:"verdict-scaledown"};
+  if(aboveAvg) return {v:"scale up", cls:"verdict-scaleup"};
+  return {v:"hold", cls:"verdict-hold"};
+}
+function buildSiteidRecoTable(){
+  const tbl = document.getElementById("tbl-siteid-reco");
+  clear(tbl);
+  const thead = document.createElement("thead");
+  thead.innerHTML = `<tr><th>Channel</th><th>SiteID</th><th>Logins (prior5-8)</th><th>Logins (last4)</th><th>Δ Logins</th>
+    <th>Dep CVR (last4)</th><th>Lvl21+ (last4)</th><th>Verdict</th></tr>`;
+  tbl.appendChild(thead);
+  const tbody = document.createElement("tbody");
+  CHANNELS.filter(ms=>ms!=="freecash_int").forEach(ms=>{
+    const chAvg = bucketRow(ms,"last4");
+    const sids = eligibleSiteids(ms);
+    sids.forEach(sid=>{
+      const l4 = SB.find(r=>r.ms===ms && r.sid===sid && r.bucket==="last4");
+      const p58 = SB.find(r=>r.ms===ms && r.sid===sid && r.bucket==="prior5_8");
+      if(!l4) return;
+      const delta = p58 ? l4.logins_all - p58.logins_all : l4.logins_all;
+      const volShare = chAvg.logins_all>0 ? l4.logins_all/chAvg.logins_all : 0;
+      const verdict = siteidVerdict(l4, p58, chAvg, volShare);
+      const tr = document.createElement("tr");
+      const newTag = !p58 ? ' <span class="pill new">new</span>' : '';
+      tr.innerHTML = `<td>${NAMES[ms]}</td><td>${sid}${newTag}</td>
+        <td>${p58?fmtNum(p58.logins_all):"—"}</td><td>${fmtNum(l4.logins_all)}</td>
+        <td class="${delta>0?'up':(delta<0?'down':'flat')}">${delta>=0?'+':''}${fmtNum(delta)}</td>
+        <td>${fmtPct(l4.dep_cvr)}</td><td>${fmtPct(l4.lvl_pct)}</td>
+        <td class="${verdict.cls}">${verdict.v}</td>`;
+      tbody.appendChild(tr);
+    });
+  });
+  tbl.appendChild(tbody);
+}
+
+// ---------- Campaign-level action table ----------
+function buildCampaignActionTable(){
+  const tbl = document.getElementById("tbl-campaign-action");
+  clear(tbl);
+  const thead = document.createElement("thead");
+  thead.innerHTML = `<tr><th>Channel</th><th>Campaign</th><th>SiteID</th><th>Logins prior5-8</th><th>Logins last4</th>
+    <th>Dep CVR prior5-8</th><th>Dep CVR last4</th><th>Δ pp</th><th>Action</th></tr>`;
+  tbl.appendChild(thead);
+  const tbody = document.createElement("tbody");
+  const groups = {};
+  CS.forEach(r=>{ const k=r.ms+"|"+r.sid+"|"+r.cat; groups[k]=groups[k]||{}; groups[k][r.bucket]=r; });
+  Object.keys(groups).forEach(k=>{
+    const [ms,sid,cat] = k.split("|");
+    const g = groups[k];
+    const a = g.last4, b = g.prior5_8;
+    if(!a) return;
+    const delta = b ? a.dep_cvr - b.dep_cvr : null;
+    let action = "monitor";
+    if(b && delta!==null && delta<-3 && a.logins_all>=b.logins_all*0.8) action = "cap/cut this siteid in campaign";
+    else if(!b) action = "new — cap early, watch quality";
+    else if(delta!==null && delta<-3) action = "quality eroding — review inventory";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${NAMES[ms]}</td><td>${cat}</td><td>${sid}</td>
+      <td>${b?fmtNum(b.logins_all):"—"}</td><td>${fmtNum(a.logins_all)}</td>
+      <td>${b?fmtPct(b.dep_cvr):"—"}</td><td>${fmtPct(a.dep_cvr)}</td>
+      <td>${deltaSpan(delta)}</td><td class="verdict-hold">${action}</td>`;
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+}
+
+// ---------- init ----------
+buildScorecards();
+buildCompareTable("tbl-4v8","last4","prior5_8","(last4)","(prior5-8)");
+buildCompareTable("tbl-wow","latest_matured","prev_week","(latest)","(prev wk)");
+buildSpendPanel();
+buildQualityPanels();
+buildChipSelector();
+buildDeepDive();
+document.getElementById("sel-category").addEventListener("change", buildDeepDive);
+buildSiteidPanel();
+document.getElementById("sel-sid-channel").addEventListener("change", buildSiteidPanel);
+document.getElementById("sel-sid-metric").addEventListener("change", buildSiteidPanel);
+buildSiteidRecoTable();
+buildCampaignActionTable();
+
+})();
+</script>
+</body>
+</html>
