@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Incent Channel Deep Dive</title>
+<script>/*CHARTJS*/</script>
+
+<style>
+:root{--bg:#fbfaf7;--card:#fff;--ink:#16130f;--ink2:#4d463d;--mut:#8a8176;--rule:#16130f;--grid:#e8e3da;--good:#1a7f4b;--bad:#c0392b;--warn:#b7791f;--plat:#16130f}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#14120f;--card:#1d1a16;--ink:#f3efe7;--ink2:#c9c1b4;--mut:#8f8678;--rule:#f3efe7;--grid:#2e2a24;--good:#4cc58a;--bad:#ef6b5b;--warn:#e0a84a;--plat:#f3efe7}}
+:root[data-theme=dark]{--bg:#14120f;--card:#1d1a16;--ink:#f3efe7;--ink2:#c9c1b4;--mut:#8f8678;--rule:#f3efe7;--grid:#2e2a24;--good:#4cc58a;--bad:#ef6b5b;--warn:#e0a84a;--plat:#f3efe7}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 Inter,system-ui,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 16px 60px}
+h1{font:600 30px Fraunces,serif;margin:0 0 4px}h2{font:600 20px Fraunces,serif;margin:36px 0 4px;border-top:2px solid var(--rule);padding-top:10px}
+.sub{color:var(--ink2);margin:0 0 12px}.mono{font-family:'JetBrains Mono',monospace}
+.note{background:var(--card);border:1px solid var(--grid);border-left:3px solid var(--warn);padding:10px 14px;margin:10px 0;font-size:13px;color:var(--ink2)}
+.card{background:var(--card);border:1px solid var(--grid);padding:14px;border-radius:4px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:800px){.grid2,.grid4{grid-template-columns:1fr}}
+.ch{height:300px;position:relative}.ch.s{height:230px}
+table{border-collapse:collapse;width:100%;font-size:12.5px}th,td{padding:6px 8px;border-bottom:1px solid var(--grid);text-align:right;white-space:nowrap}
+th:first-child,td:first-child,th.l,td.l{text-align:left}th{font-weight:600;color:var(--ink2);cursor:pointer;position:sticky;top:0;background:var(--card)}
+.tw{overflow-x:auto;max-height:560px}
+.up{color:var(--good)}.dn{color:var(--bad)}.bd{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;border:1px solid}
+.v-up{color:var(--good);border-color:var(--good)}.v-dn{color:var(--bad);border-color:var(--bad)}.v-h{color:var(--ink2);border-color:var(--mut)}.v-w{color:var(--warn);border-color:var(--warn)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.chip{border:1px solid var(--rule);padding:4px 12px;border-radius:16px;cursor:pointer;background:var(--card);color:var(--ink);font:inherit}
+.chip.on{background:var(--ink);color:var(--bg)}select{font:inherit;padding:4px 8px;background:var(--card);color:var(--ink);border:1px solid var(--rule)}
+.kpi b{display:block;font:600 22px 'JetBrains Mono',monospace}.kpi span{font-size:12px;color:var(--mut)}
+.lg{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink2);margin:4px 0}.lg i{display:inline-block;width:12px;height:3px;margin-right:5px;vertical-align:middle}
+li{margin:3px 0}
+</style></head><body><div class="wrap">
+<h1>Incent Channel Deep Dive</h1>
+<p class="sub">US · D7-matured cohorts · generated 2026-10-02 · <b>Last 4 matured weeks (L4)</b> = 24 Aug – 20 Sep vs <b>prior 4 (P4)</b> = 27 Jul – 23 Aug · <b>Latest matured week</b> = 14–20 Sep vs previous 07–13 Sep. Week of 21–27 Sep excluded (D7 not matured).</p>
+<div class="note"><b>Read first.</b> (1) All incent D7 ROAS is far below the 30% "green" convention, so verdicts are <i>relative to the blended incent ROAS</i> (ex-FreeCash), with Dep CVR / Lvl&gt;20 vs platform as tie-breakers. (2) <b>Spend is campaign-level only</b> — siteid-level ROAS is <i>estimated</i> by allocating channel×category spend pro-rata to logins (assumes uniform CPL inside a campaign). (3) <b>FreeCash has no spend mapped</b> to campaign names (spend=0), so ROAS is n/a and it is excluded from blended ROAS. (4) InboxDollars switched Prodege→<code>vc-*</code> siteids on 2026-03-23 (reporting change, not acquisition) — irrelevant inside this window but never compare siteids across that date. (5) Dep CVR = all logins; Lvl&gt;20 = Player logins only; D0–D7 inclusive. Siteids shown have ≥200 logins in the 8-week window.</div>
+
+<h2>0 · Action summary</h2><div id="actions"></div>
+
+<h2>1 · Period comparison</h2>
+<p class="sub">Δ in pp for rates, % for spend/logins. Platform benchmark = all US channels incl. organic, same metric definitions.</p>
+<div class="card" style="overflow-x:auto"><table id="cmp"></table></div>
+
+<h2>Panel I · Weekly spend by channel</h2><div class="card"><div class="ch"><canvas id="c1"></canvas></div></div>
+
+<h2>Panel II · Quality by channel vs platform</h2><div class="lg" id="lg2"></div>
+<div class="grid2"><div class="card"><b>D7 Dep CVR %</b><div class="ch"><canvas id="c2a"></canvas></div></div><div class="card"><b>D7 Level&gt;20 % (Player logins)</b><div class="ch"><canvas id="c2b"></canvas></div></div></div>
+
+<h2>Panel III · Channel deep dive</h2>
+<div class="chips" id="chips"></div>
+<div>Category: <select id="catsel"><option>Overall</option><option>Bingo</option><option>Solitaire</option></select></div>
+<div class="grid2" style="margin-top:10px">
+<div class="card"><b>Spend $</b><div class="ch s"><canvas id="c3a"></canvas></div></div>
+<div class="card"><b>D7 ROAS % (CM1 / spend)</b><div class="ch s"><canvas id="c3d"></canvas></div></div>
+<div class="card"><b>D7 Dep CVR % (vs platform)</b><div class="ch s"><canvas id="c3b"></canvas></div></div>
+<div class="card"><b>D7 Lvl&gt;20 % (vs platform)</b><div class="ch s"><canvas id="c3c"></canvas></div></div></div>
+
+<h2>Panel IV · SiteID flags</h2>
+<p class="sub">Verdict rules — <b>SCALE UP</b>: est ROAS ≥1.3× blended with Dep ≥ platform and latest-week ≥ blended, <i>or</i> ROAS ≈ blended with Dep &amp; Lvl20 both ≥ platform and improving. <b>SCALE DOWN</b>: ROAS &lt;0.75× blended, or below blended with Dep &lt; platform and Lvl20 &lt;80% of platform. <b>TEST SCALE</b>: passes scale-up but &lt;150 logins. Min 100 L4 logins to act.</p>
+<div>Channel: <select id="sidch"><option value="all">All</option></select></div>
+<div class="card tw" style="margin-top:8px"><table id="sidtbl"></table></div>
+<div style="margin-top:14px">Trend metric: <select id="sidmet"><option value="roas">Est D7 ROAS %</option><option value="dep">Dep CVR %</option><option value="l20">Lvl&gt;20 %</option><option value="la">Logins</option></select></div>
+<div class="card" style="margin-top:8px"><div class="ch"><canvas id="c4"></canvas></div></div>
+</div>
+<script>
+const D=/*DATA*/;const R=D.R,ROWS=D.rows;
+const WK=['07-27','08-03','08-10','08-17','08-24','08-31','09-07','09-14'];
+const COL={inboxdollars:'#D64545',myappfre:'#E8A33D',adaction5:'#5B7FDB',freecash:'#4AAB7E',kashkick:'#9B59B6'};
+const NAME={inboxdollars:'InboxDollars',myappfre:'MyAppFree',adaction5:'AdAction',freecash:'FreeCash',kashkick:'KashKick'};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const f=(x,n=1)=>x==null?'—':x.toFixed(n);const $=id=>document.getElementById(id);
+function agg(rs){const o={spend:0,la:0,lp:0,dep:0,l20:0,cm1:0};rs.forEach(r=>{for(const k in o)o[k]+=r[k]});return o}
+function met(o){return{spend:o.spend,la:o.la,dep:o.la?100*o.dep/o.la:null,l20:o.lp?100*o.l20/o.lp:null,roas:o.spend?100*o.cm1/o.spend:null}}
+const chs=['inboxdollars','myappfre','adaction5','freecash'];
+// ---- action summary
+const A=R.siteids;const camps=v=>[...new Set(A.filter(d=>v(d)).flatMap(d=>d.campaigns))];
+function list(vf){return A.filter(d=>vf(d.verdict)).map(d=>`<li><b>${NAME[d.ch]} · ${d.sid}</b> <span class="bd ${cls(d.verdict)}">${d.verdict}</span> — ${d.reason} <i>Campaigns:</i> ${[...new Set(d.campaigns)].join('; ')||'—'}</li>`).join('')}
+function cls(v){return v.startsWith('SCALE UP')||v=='TEST SCALE'?'v-up':v=='SCALE DOWN'?'v-dn':v.startsWith('PAUSED')?'v-w':'v-h'}
+const al=R.channels.ALL,pl=R.platform;
+$('actions').innerHTML=`<div class="grid4"><div class="card kpi"><span>Incent spend L4 vs P4</span><b>$${(al.L4.spend/1e3).toFixed(0)}k</b><span>${((al.L4.spend/al.P4.spend-1)*100).toFixed(0)}% vs $${(al.P4.spend/1e3).toFixed(0)}k</span></div>
+<div class="card kpi"><span>Blended D7 ROAS (ex-FreeCash)</span><b>${f(al.L4.roas)}%</b><span>P4 ${f(al.P4.roas)}% · latest wk ${f(al.LAT.roas)}%</span></div>
+<div class="card kpi"><span>Dep CVR L4 (platform ${f(pl.L4.dep)}%)</span><b>${f(al.L4.dep)}%</b><span>P4 ${f(al.P4.dep)}%</span></div>
+<div class="card kpi"><span>Lvl&gt;20 L4 (platform ${f(pl.L4.l20)}%)</span><b>${f(al.L4.l20)}%</b><span>P4 ${f(al.P4.l20)}%</span></div></div>
+<div class="card" style="margin-top:12px"><b class="up">Scale up / test</b><ul>${list(v=>v.startsWith('SCALE UP')||v=='TEST SCALE')||'<li>None</li>'}</ul>
+<b class="dn">Scale down</b><ul>${list(v=>v=='SCALE DOWN')}</ul>
+<b style="color:var(--warn)">Traffic dropped / paused — verify intent</b><ul>${list(v=>v.startsWith('PAUSED')||v=='INACTIVE')}</ul></div>`;
+// ---- comparison table
+function cmpRow(label,m,isPlat){const t=(a,b,k,pp)=>{if(a==null||b==null)return '—';const d=pp?a-b:(b?100*(a/b-1):0);const good=(k=='spend')?null:d>=0;return `<span class="${good==null?'':good?'up':'dn'}">${d>=0?'+':''}${d.toFixed(pp?1:0)}${pp?'pp':'%'}</span>`};
+ const cell=(p,q,k,n)=>`<td>${f(p[k],n)}</td><td>${f(q[k],n)}</td><td>${t(p[k],q[k],k,k!='spend'&&k!='la')}</td>`;return ''}
+function tbl(){const head=(a,b)=>`<td class="mono" colspan=3 style="text-align:center">${a}</td>`;let h='<tr><th rowspan=2 class="l">Channel</th><th rowspan=2 class="l">Metric</th><th colspan=3>L4 vs P4 (4 mat. wks)</th><th colspan=3>Latest vs previous wk</th></tr><tr><th>L4</th><th>P4</th><th>Δ</th><th>Latest</th><th>Prev</th><th>Δ</th></tr>';
+ const sets=[['Incent blended (ex-FC)',R.channels.ALL],...chs.map(c=>[NAME[c],R.channels[c]]),['Platform (all channels)',R.platform]];
+ const mets=[['spend','Spend $',0],['la','Logins',0],['dep','Dep CVR %',1],['l20','Lvl>20 %',1],['roas','D7 ROAS %',1]];
+ sets.forEach(([nm,s],i)=>mets.forEach(([k,lab,n],j)=>{if(nm.startsWith('Platform')&&(k=='spend'||k=='roas'))return;
+  const a=s.L4[k],b=s.P4[k],c=s.LAT[k],d=s.PREV[k];const pp=(k=='dep'||k=='l20'||k=='roas');
+  const dl=(x,y)=>x==null||y==null||!y&&!pp?'—':pp?`<span class="${x-y>=0?'up':'dn'}">${(x-y>=0?'+':'')+(x-y).toFixed(1)}pp</span>`:`<span>${(x/y-1>=0?'+':'')+((x/y-1)*100).toFixed(0)}%</span>`;
+  h+=`<tr${j==0?' style="border-top:2px solid var(--rule)"':''}><td class="l">${j==0?`<b>${nm}</b>`:''}</td><td class="l">${lab}</td><td>${f(a,n)}</td><td>${f(b,n)}</td><td>${dl(a,b)}</td><td>${f(c,n)}</td><td>${f(d,n)}</td><td>${dl(c,d)}</td></tr>`}));
+ $('cmp').innerHTML=h}tbl();
+// ---- charts
+Chart.defaults.font.family='Inter';Chart.defaults.color=css('--ink2');
+const grid={color:css('--grid')};const opt=(y,extra={})=>({responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid,beginAtZero:true,...y}},...extra});
+new Chart($('c1'),{type:'bar',data:{labels:WK,datasets:chs.filter(c=>c!='freecash').map(c=>({label:NAME[c],backgroundColor:COL[c],borderRadius:3,data:WK.map(w=>ROWS.filter(r=>r.ch==c&&r.wk==w).reduce((a,r)=>a+r.spend,0))}))},options:{...opt({stacked:true}),plugins:{legend:{display:true}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,grid}}}});
+const plW=R.platform_weekly;
+function ds(c,k){return{label:NAME[c],borderColor:COL[c],backgroundColor:COL[c],borderWidth:2,pointRadius:3,tension:.2,data:R.channels[c].weekly.map(w=>w[k])}}
+const plat=k=>({label:'Platform',borderColor:css('--plat'),borderDash:[6,4],borderWidth:2,pointRadius:0,data:plW.map(w=>w[k])});
+$('lg2').innerHTML=chs.map(c=>`<span><i style="background:${COL[c]}"></i>${NAME[c]}</span>`).join('')+'<span><i style="background:var(--plat)"></i>Platform (dashed)</span>';
+['dep','l20'].forEach((k,i)=>new Chart($(i?'c2b':'c2a'),{type:'line',data:{labels:WK,datasets:[...chs.map(c=>ds(c,k)),plat(k)]},options:opt({})}));
+let cur='inboxdollars',c3=[];
+$('chips').innerHTML=chs.map(c=>`<button class="chip" data-c="${c}">${NAME[c]}</button>`).join('');
+function drill(){document.querySelectorAll('.chip').forEach(b=>b.classList.toggle('on',b.dataset.c==cur));c3.forEach(c=>c.destroy());c3=[];
+ const cat=$('catsel').value;const w=WK.map(x=>met(agg(ROWS.filter(r=>r.ch==cur&&r.wk==x&&(cat=='Overall'||r.cat==cat)))));const col=COL[cur];
+ const mk=(id,k,type,withPlat)=>c3.push(new Chart($(id),{type,data:{labels:WK,datasets:[{label:NAME[cur],data:w.map(m=>m[k]),borderColor:col,backgroundColor:type=='bar'?col+'66':col,borderWidth:2,borderRadius:3,pointRadius:3,tension:.2},...(withPlat?[plat(k)]:[])]},options:opt({})}));
+ mk('c3a','spend','bar');mk('c3d','roas','line');mk('c3b','dep','line',1);mk('c3c','l20','line',1)}
+document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{cur=b.dataset.c;drill()});$('catsel').onchange=drill;drill();
+// ---- siteid table
+const sc=$('sidch');[...new Set(A.map(d=>d.ch))].forEach(c=>sc.insertAdjacentHTML('beforeend',`<option value="${c}">${NAME[c]}</option>`));
+let sortK='L4la',sortD=-1;
+function sidtbl(){const cf=sc.value;let rs=A.filter(d=>cf=='all'||d.ch==cf);
+ const val=d=>sortK=='L4la'?d.L4.la:sortK=='roas'?(d.L4.roas??-99):sortK=='dep'?d.L4.dep??-1:sortK=='l20'?d.L4.l20??-1:d.verdict;rs.sort((a,b)=>val(a)>val(b)?sortD:-sortD);
+ let h='<tr><th class="l">Channel</th><th class="l">SiteID</th><th class="l">Verdict</th><th data-k="L4la">L4 logins</th><th>P4 logins</th><th data-k="roas">L4 est ROAS</th><th>P4</th><th>Latest wk</th><th>Prev wk</th><th data-k="dep">L4 Dep%</th><th>P4 Dep%</th><th data-k="l20">L4 Lvl20%</th><th>P4 Lvl20%</th><th class="l">Campaigns (action applies to)</th></tr>';
+ rs.forEach(d=>{h+=`<tr title="${d.reason}"><td class="l">${NAME[d.ch]}</td><td class="l mono">${d.sid}</td><td class="l"><span class="bd ${cls(d.verdict)}">${d.verdict}</span></td><td>${d.L4.la}</td><td>${d.P4.la}</td><td>${f(d.L4.roas)}</td><td>${f(d.P4.roas)}</td><td>${f(d.LAT.roas)}</td><td>${f(d.PREV.roas)}</td><td>${f(d.L4.dep)}</td><td>${f(d.P4.dep)}</td><td>${f(d.L4.l20)}</td><td>${f(d.P4.l20)}</td><td class="l" style="white-space:normal;min-width:220px">${[...new Set(d.campaigns)].join('<br>')||'—'}</td></tr>`});
+ $('sidtbl').innerHTML=h;$('sidtbl').querySelectorAll('th[data-k]').forEach(t=>t.onclick=()=>{sortK=t.dataset.k;sortD=-sortD;sidtbl()})}
+sc.onchange=()=>{sidtbl();sidchart()};sidtbl();
+let c4;const PAL=['#5B7FDB','#D64545','#E8A33D','#4AAB7E','#9B59B6','#2A9D8F','#8D6E63','#E76F9A','#6C757D','#B5A300'];
+function sidchart(){c4&&c4.destroy();const m=$('sidmet').value;const cf=sc.value;const rs=A.filter(d=>(cf=='all'||d.ch==cf)&&d.L4.la+d.P4.la>=300);
+ c4=new Chart($('c4'),{type:'line',data:{labels:WK,datasets:rs.map((d,i)=>({label:`${NAME[d.ch]} ${d.sid}`,data:d.weekly.map(w=>w.la>=20||m=='la'?w[m]:null),borderColor:PAL[i%PAL.length],backgroundColor:PAL[i%PAL.length],borderWidth:2,pointRadius:3,tension:.2,spanGaps:false}))},options:{...opt({}),plugins:{legend:{display:true,position:'bottom',labels:{boxWidth:12,font:{size:11}}}}}})}
+$('sidmet').onchange=sidchart;sidchart();
+</script></body></html>
