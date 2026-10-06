@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Incent Channel Deep Dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#fbfaf7;--fg:#111;--mut:#666;--rule:#111;--card:#fff;--line:#ddd;--up:#1f8a4c;--dn:#c0392b;--hold:#8a6d1f}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#15161a;--fg:#eee;--mut:#9a9a9a;--rule:#eee;--card:#1d1f24;--line:#333;--up:#4cc489;--dn:#ef7a6c;--hold:#d9b45a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 'JetBrains Mono',monospace;padding:0 16px 60px}
+.wrap{max-width:1280px;margin:0 auto}h1{font:700 32px 'Fraunces',serif;margin:28px 0 4px}h2{font:700 22px 'Fraunces',serif;margin:0 0 4px;border-top:3px solid var(--rule);padding-top:10px}
+.sub{color:var(--mut);font-size:12px}section{margin:34px 0}.card{background:var(--card);border:1px solid var(--line);padding:14px;border-radius:2px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:820px){.grid2{grid-template-columns:1fr}}
+table{border-collapse:collapse;width:100%;font-size:12px}th,td{padding:5px 7px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th:first-child,td:first-child,th.l,td.l{text-align:left}th{font-weight:600;border-bottom:2px solid var(--rule);position:sticky;top:0;background:var(--card)}
+.sc{overflow-x:auto;max-height:560px}.pill{padding:2px 7px;border-radius:10px;font-size:11px;font-weight:600;color:#fff}.up{background:var(--up)}.dn{background:var(--dn)}.hd{background:var(--hold)}.na{background:#888}
+.g{color:var(--up)}.r{color:var(--dn)}.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.chip{border:1px solid var(--rule);padding:4px 10px;cursor:pointer;background:transparent;color:var(--fg);font:inherit;font-size:12px;border-radius:14px}.chip.on{background:var(--fg);color:var(--bg)}
+select{font:inherit;background:var(--card);color:var(--fg);border:1px solid var(--rule);padding:4px}.ctl{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0}.ch{position:relative;height:340px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}.kpi b{display:block;font:700 22px 'Fraunces',serif}.note{font-size:12px;color:var(--mut);margin:6px 0}
+</style></head><body><div class="wrap">
+<h1>Incent Channel Deep Dive</h1>
+<div class="sub">US · D7-matured cohorts only · weeks = login-week starting Monday · Generated __GEN__ · Latest matured week: <b>21 Sep – 27 Sep 2026</b></div>
+<div class="note"><b>Windows:</b> Last-4 (matured) = 31 Aug–27 Sep · Prior-4 (weeks 5–8 back) = 3 Aug–30 Aug · Latest = wk of 21 Sep · Previous = wk of 14 Sep. Week of 28 Sep is excluded (D7 not matured). KashKick: no spend/logins in window.</div>
+
+<section id="s1"><h2>1 · Summary</h2><div class="sub">Incent portfolio = all siteids with ≥200 logins in window (covers __COV__% of incent logins). Platform = all US logins incl. organic.</div>
+<div class="kpis" id="kpis" style="margin-top:10px"></div>
+<div class="card sc" style="margin-top:12px"><table id="tCh"></table></div></section>
+
+<section id="s2"><h2>2 · Spend & quality by channel (Panels I–II)</h2>
+<div class="card"><div class="sub">Panel I — weekly spend by channel</div><div class="ch"><canvas id="cSpend"></canvas></div></div>
+<div class="grid2" style="margin-top:14px"><div class="card"><div class="sub">Panel II-a — D7 Dep CVR % (dashed = platform)</div><div class="ch"><canvas id="cCvr"></canvas></div></div>
+<div class="card"><div class="sub">Panel II-b — D7 Level&gt;20 % (dashed = platform)</div><div class="ch"><canvas id="cL20"></canvas></div></div></div></section>
+
+<section id="s3"><h2>3 · Channel deep dive (Panel III)</h2>
+<div class="ctl"><div class="chips" id="chips"></div><label>Category <select id="selCat"><option>Overall</option><option>Bingo</option><option>Solitaire</option></select></label></div>
+<div class="card"><div class="ch" style="height:380px"><canvas id="cDeep"></canvas></div><div class="note" id="deepNote"></div></div></section>
+
+<section id="s4"><h2>4 · SiteID drilldown (Panel IV)</h2>
+<div class="ctl"><label>Channel <select id="selCh"></select></label><label>Metric <select id="selMet"><option value="cvr">D7 Dep CVR %</option><option value="l20">D7 Lvl&gt;20 %</option><option value="roas">D7 ROAS % (alloc. spend)</option><option value="spend">Spend (alloc.)</option><option value="la">Logins</option></select></label></div>
+<div class="card"><div class="ch" style="height:380px"><canvas id="cSid"></canvas></div></div>
+<div class="note">SiteID spend is not reported by the spend table: campaign-week spend is allocated to siteids pro-rata to logins (equal cost per login within a campaign-week). SiteID ROAS therefore reflects revenue/login differences only. InboxDollars siteids switched from <i>Prodege</i> to <i>vc-*</i> codes on 23 Mar 2026 (reporting change, not an acquisition event).</div></section>
+
+<section id="s5"><h2>5 · SiteID scorecard & recommendation</h2>
+<div class="sub">Rules: <b>Scale up</b> = last-4 ROAS ≥1.25× incent avg, CVR or Lvl&gt;20 ≥ avg, ROAS ≥avg in ≥2 of 4 weeks and latest week not collapsing. <b>Scale down</b> = ROAS ≤0.6× avg, or below avg with both CVR and Lvl&gt;20 &gt;15% under avg, or latest-week ROAS &lt;0.6× avg with weak quality. Needs ≥150 logins (siteid) / ≥100 (siteid×campaign) in last-4; &lt;60 logins in latest 2 weeks = dormant.</div>
+<div class="ctl"><label>Filter <select id="selFlag"><option value="">All</option><option>SCALE UP</option><option>SCALE DOWN</option><option>HOLD</option><option>DORMANT</option><option>LOW VOLUME</option></select></label></div>
+<div class="card sc"><table id="tSid"></table></div>
+<h3 style="font:700 17px Fraunces;margin:22px 0 4px">SiteID × campaign action list</h3>
+<div class="card sc"><table id="tCamp"></table></div></section>
+
+<section><h2>Notes & method</h2><ul class="note">
+<li>Dep CVR = D0–D7 depositors / all logins (no Player filter). Lvl&gt;20 = player logins reaching level 21+ within D7 (capped at next reinstall). ROAS = D7 CM1 / spend. Green ≥30%, red &lt;10% convention applies — all incent ROAS here is below 10% except as noted.</li>
+<li>FreeCash = Almedia Bingo campaign (spend matched on "almedia"; launched week of 31 Aug, so no prior-4 comparison). FreeCash logins with NULL campaign excluded from siteid views.</li>
+<li>Platform ROAS divides platform D7 CM1 by all marketing spend in the spend table (not incent only).</li></ul></section>
+</div>
+<script>
+const D=__DATA__;
+const COL={adaction5_int:'#5B7FDB',freecash_int:'#4AAB7E',inboxdollars_int:'#D64545',myappfre_int:'#E8A33D'};
+const CH=Object.keys(D.chan);const WL=D.weeks.map(w=>w.slice(5));
+const fx=(v,p=1,s='')=>v==null?'—':v.toFixed(p)+s;
+const cvr=o=>o.la?100*o.deps/o.la:null,l20=o=>o.lp?100*o.l20/o.lp:null,roas=o=>o.spend>0?100*o.cm1/o.spend:null;
+const axisCss=getComputedStyle(document.documentElement);
+Chart.defaults.font.family="'JetBrains Mono',monospace";Chart.defaults.font.size=11;Chart.defaults.color='#888';
+const mk=(id,type,data,opt)=>new Chart(document.getElementById(id),{type,data,options:Object.assign({responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{boxWidth:10}}}},opt||{})});
+function dl(a,b,hi=true,pp=''){if(a==null||b==null)return '<td>—</td>';const d=a-b;const good=hi?d>=0:d<=0;return `<td class="${good?'g':'r'}">${d>=0?'+':''}${d.toFixed(1)}${pp}</td>`}
+// KPIs
+const P=D.port,PL=D.platP;
+function kpi(t,k,pp,hi){const a=P.R[k],b=P.P[k],c=P.L[k],d=P.PW[k];return `<div class="card kpi"><span class="sub">${t}</span><b>${fx(a,1,pp)}</b><span class="sub">last-4 vs prior-4: <span class="${a>=b==hi?'g':'r'}">${a>=b?'+':''}${(a-b).toFixed(1)}</span> · latest wk ${fx(c,1,pp)} vs prev ${fx(d,1,pp)}</span><br><span class="sub">platform last-4: ${fx(PL.R[k],1,pp)}</span></div>`}
+document.getElementById('kpis').innerHTML=kpi('Incent D7 Dep CVR','cvr','%',true)+kpi('Incent D7 Lvl>20','l20','%',true)+kpi('Incent D7 ROAS','roas','%',true)+
+`<div class="card kpi"><span class="sub">Incent spend (siteid-covered)</span><b>$${(P.R.spend/1000).toFixed(0)}k</b><span class="sub">last-4 vs prior-4: $${(P.P.spend/1000).toFixed(0)}k · latest wk $${(P.L.spend/1000).toFixed(1)}k vs $${(P.PW.spend/1000).toFixed(1)}k</span></div>`;
+// channel table
+let h='<tr><th>Channel</th><th colspan=1></th><th>Spend L4</th><th>Spend P4</th><th>CVR L4</th><th>CVR P4</th><th>Δ</th><th>Lvl20 L4</th><th>Lvl20 P4</th><th>Δ</th><th>ROAS L4</th><th>ROAS P4</th><th>Δ</th><th>| Latest wk</th><th>CVR</th><th>Lvl20</th><th>ROAS</th><th>Prev wk</th><th>CVR</th><th>Lvl20</th><th>ROAS</th></tr>';
+const row=(n,p)=>`<tr><td>${n}</td><td></td><td>$${(p.R.spend/1000).toFixed(1)}k</td><td>$${(p.P.spend/1000).toFixed(1)}k</td><td>${fx(p.R.cvr)}</td><td>${fx(p.P.cvr)}</td>${dl(p.R.cvr,p.P.cvr)}<td>${fx(p.R.l20)}</td><td>${fx(p.P.l20)}</td>${dl(p.R.l20,p.P.l20)}<td>${fx(p.R.roas)}</td><td>${fx(p.P.roas)}</td>${dl(p.R.roas,p.P.roas)}<td></td><td>${fx(p.L.cvr)}</td><td>${fx(p.L.l20)}</td><td>${fx(p.L.roas)}</td><td></td><td>${fx(p.PW.cvr)}</td><td>${fx(p.PW.l20)}</td><td>${fx(p.PW.roas)}</td></tr>`;
+CH.forEach(c=>h+=row(D.chan[c].name,D.chan[c].per));h+=row('<b>Platform (all)</b>',D.platP);
+document.getElementById('tCh').innerHTML=h;
+// panel I
+mk('cSpend','bar',{labels:WL,datasets:CH.map(c=>({label:D.chan[c].name,data:D.chan[c].weekly.map(w=>w.spend),backgroundColor:COL[c]}))},{scales:{x:{stacked:true},y:{stacked:true,ticks:{callback:v=>'$'+v/1000+'k'}}}});
+// panel II
+const lines=(id,fn)=>mk(id,'line',{labels:WL,datasets:CH.filter(c=>c!='freecash_int'||true).map(c=>({label:D.chan[c].name,data:D.chan[c].weekly.map((w,i)=>(c=='freecash_int'&&i<4)?null:fn(w)),borderColor:COL[c],backgroundColor:COL[c],tension:.2,spanGaps:false})).concat([{label:'Platform',data:D.plat.map(fn),borderColor:'#888',borderDash:[5,4],pointRadius:0}])},{scales:{y:{ticks:{callback:v=>v+'%'}}}});
+lines('cCvr',cvr);lines('cL20',l20);
+// panel III
+let curCh=CH[0];const chips=document.getElementById('chips');
+CH.forEach(c=>{const b=document.createElement('button');b.className='chip'+(c==curCh?' on':'');b.textContent=D.chan[c].name;b.onclick=()=>{curCh=c;[...chips.children].forEach(x=>x.classList.remove('on'));b.classList.add('on');drawDeep()};chips.appendChild(b)});
+let deep;
+function drawDeep(){const cat=document.getElementById('selCat').value;let src;
+ if(cat=='Overall')src=D.chan[curCh].weekly;else src=D.cat[curCh+'|'+cat]||Array(8).fill({la:0,lp:0,deps:0,l20:0,cm1:0,spend:0});
+ const ok=w=>w.la>0;
+ const data={labels:WL,datasets:[{type:'bar',label:'Spend',data:src.map(w=>w.spend),backgroundColor:'rgba(150,150,150,.3)',yAxisID:'y'},
+ {type:'line',label:'Dep CVR %',data:src.map(w=>ok(w)?cvr(w):null),borderColor:COL[curCh],yAxisID:'y1'},
+ {type:'line',label:'Lvl>20 %',data:src.map(w=>ok(w)?l20(w):null),borderColor:'#111',yAxisID:'y1'},
+ {type:'line',label:'D7 ROAS %',data:src.map(w=>ok(w)&&w.spend>0?roas(w):null),borderColor:'#9B59B6',borderDash:[6,4],yAxisID:'y2'}]};
+ if(deep)deep.destroy();
+ deep=new Chart(document.getElementById('cDeep'),{data,options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},scales:{y:{position:'left',ticks:{callback:v=>'$'+v/1000+'k'}},y1:{position:'right',grid:{drawOnChartArea:false},ticks:{callback:v=>v+'%'}},y2:{display:false}}}});
+ document.getElementById('deepNote').textContent=cat=='Overall'?'Overall = all logins of the channel.':'Category view uses siteids with ≥200 logins (≈'+Math.round(D.coverage*100)+'% of logins); spend is full campaign spend.';}
+document.getElementById('selCat').onchange=drawDeep;drawDeep();
+// panel IV
+const selCh=document.getElementById('selCh');CH.forEach(c=>selCh.add(new Option(D.chan[c].name,c)));selCh.value='inboxdollars_int';
+const PAL=['#D64545','#E8A33D','#5B7FDB','#4AAB7E','#9B59B6','#17a2b8','#795548','#e91e63'];let sidC;
+function drawSid(){const c=selCh.value,m=document.getElementById('selMet').value;const ss=D.S.filter(s=>s.ms==c&&s.m.R.la>0&&(s.m.R.la+s.m.P.la)>=200||(s.ms==c&&s.m.R.la>=100));
+ const f=w=>m=='cvr'?(w.la?cvr(w):null):m=='l20'?(w.lp?l20(w):null):m=='roas'?(w.spend>0&&w.la>=20?roas(w):null):m=='spend'?w.spend:w.la;
+ const ds=ss.map((s,i)=>({label:s.sid+' ['+s.act.split(' ')[0]+']',data:s.weekly.map((w,j)=>(m=='cvr'||m=='l20'||m=='roas')&&w.la<20?null:f(w)),borderColor:PAL[i%8],backgroundColor:PAL[i%8],tension:.2,spanGaps:false}));
+ if(sidC)sidC.destroy();sidC=new Chart(document.getElementById('cSid'),{type:'line',data:{labels:WL,datasets:ds},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false}}});}
+selCh.onchange=drawSid;document.getElementById('selMet').onchange=drawSid;drawSid();
+// scorecards
+const pill=f=>`<span class="pill ${f=='SCALE UP'?'up':f=='SCALE DOWN'?'dn':f=='HOLD'?'hd':'na'}">${f}</span>`;
+const hdr='<th>M</th>';
+function tbl(el,rows,withCamp){let h=`<tr><th class="l">Channel</th><th class="l">SiteID</th>${withCamp?'<th class="l">Campaign</th>':''}<th class="l">Action</th><th>Logins L4</th><th>Spend L4*</th><th>CVR L4</th><th>CVR P4</th><th>Lvl20 L4</th><th>Lvl20 P4</th><th>ROAS L4</th><th>ROAS P4</th><th>Logins latest</th><th>ROAS latest</th><th>ROAS prev</th><th>CVR latest</th><th>CVR prev</th></tr>`;
+ rows.forEach(s=>{const m=s.m;h+=`<tr><td class="l">${s.ch}</td><td class="l">${s.sid}</td>${withCamp?`<td class="l">${s.campn}</td>`:''}<td class="l">${pill(s.flag)}</td><td>${m.R.la}</td><td>$${m.R.spend}</td><td>${fx(m.R.cvr)}</td><td>${fx(m.P.cvr)}</td><td>${fx(m.R.l20)}</td><td>${fx(m.P.l20)}</td><td>${fx(m.R.roas)}</td><td>${fx(m.P.roas)}</td><td>${m.L.la}</td><td>${fx(m.L.roas)}</td><td>${fx(m.PW.roas)}</td><td>${fx(m.L.cvr)}</td><td>${fx(m.PW.cvr)}</td></tr>`});el.innerHTML=h+'<tr><td colspan=16 class="l sub">* spend allocated pro-rata to logins within campaign-week</td></tr>'}
+const ord={'SCALE UP':0,'SCALE DOWN':1,'HOLD':2,'DORMANT':3,'LOW VOLUME':4};
+function drawTbl(){const f=document.getElementById('selFlag').value;tbl(document.getElementById('tSid'),D.S.filter(s=>!f||s.flag==f).sort((a,b)=>ord[a.flag]-ord[b.flag]||b.m.R.la-a.m.R.la),false);
+ tbl(document.getElementById('tCamp'),D.C.filter(s=>(s.flag=='SCALE UP'||s.flag=='SCALE DOWN')&&(!f||s.flag==f)).sort((a,b)=>ord[a.flag]-ord[b.flag]||b.m.R.la-a.m.R.la),true);}
+document.getElementById('selFlag').onchange=drawTbl;drawTbl();
+</script></body></html>
