@@ -1,0 +1,211 @@
+<title>Incent Channel Deep Dive</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=JetBrains+Mono:wght@400;600&family=Instrument+Sans:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* Layout: report column with summary first, then comparison tables, then four chart panels, then siteid and campaign action tables. */
+:root{--bg:#F6F7F9;--panel:#FFFFFF;--fg:#14181F;--muted:#5C6675;--rule:#14181F;--grid:#E3E7ED;--up:#17804F;--down:#C4382F;--hold:#8A6A12;--upbg:#E3F3EA;--downbg:#FBE7E5;--holdbg:#FAF1D9;--dormbg:#ECEFF3;
+--ind:#D64545;--maf:#E8A33D;--ada:#5B7FDB;--fc:#4AAB7E;--plat:#14181F;
+--display:'Fraunces',Georgia,serif;--body:'Instrument Sans',system-ui,sans-serif;--mono:'JetBrains Mono',ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0F1319;--panel:#171C24;--fg:#E8ECF2;--muted:#98A2B3;--rule:#E8ECF2;--grid:#2A313C;--up:#4CC38A;--down:#F0766D;--hold:#E0B84D;--upbg:#143325;--downbg:#3A1B19;--holdbg:#3A2F12;--dormbg:#222933;--plat:#E8ECF2;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0F1319;--panel:#171C24;--fg:#E8ECF2;--muted:#98A2B3;--rule:#E8ECF2;--grid:#2A313C;--up:#4CC38A;--down:#F0766D;--hold:#E0B84D;--upbg:#143325;--downbg:#3A1B19;--holdbg:#3A2F12;--dormbg:#222933;--plat:#E8ECF2;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:14px;line-height:1.5;padding-block:28px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+h1,h2,h3{font-family:var(--display);font-weight:700;margin:0;text-wrap:balance}
+h1{font-size:clamp(26px,4vw,38px);line-height:1.1}
+h2{font-size:22px;border-top:2px solid var(--rule);padding-top:10px}
+h3{font-size:16px}
+.sub{color:var(--muted);max-width:75ch;margin:6px 0 0}
+.mono,td.n,th.n{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.panel{background:var(--panel);border:1px solid var(--grid);border-radius:6px;padding:16px;min-width:0}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.pill{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:600;padding:2px 8px;border-radius:3px;white-space:nowrap}
+.SCALEUP{background:var(--upbg);color:var(--up)}.SCALEDOWN{background:var(--downbg);color:var(--down)}.HOLD,.WATCH{background:var(--holdbg);color:var(--hold)}.DORMANT{background:var(--dormbg);color:var(--muted)}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--grid);text-align:left;white-space:nowrap}
+th{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1.5px solid var(--rule)}
+td.n,th.n{text-align:right}
+tr.plat td{font-weight:600;background:var(--dormbg)}
+td.camp{white-space:normal;max-width:360px;word-break:break-all;font-family:var(--mono);font-size:11px}
+.good{color:var(--up)}.bad{color:var(--down)}
+.chip{font-family:var(--mono);font-size:12px;border:1px solid var(--grid);background:var(--panel);color:var(--fg);padding:5px 10px;border-radius:3px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.chip:focus-visible,select:focus-visible{outline:2px solid var(--ada);outline-offset:2px}
+select{font-family:var(--mono);font-size:12px;background:var(--panel);color:var(--fg);border:1px solid var(--grid);padding:5px 8px;border-radius:3px}
+.ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.cv{position:relative;height:300px}
+.cv.tall{height:360px}
+.note{font-size:12.5px;color:var(--muted)}
+.note li{margin-bottom:4px}
+.reco{display:flex;flex-direction:column;gap:6px}
+.reco .row{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+</style>
+<div class="wrap">
+<header>
+  <div class="eyebrow">MPL · US incent · D7-matured cohorts · weeks starting Mon</div>
+  <h1>Incent Channel Deep Dive</h1>
+  <p class="sub">Last 4 matured weeks (Sep 14 – Oct 11) against the 4 weeks before (Aug 17 – Sep 13), plus the latest matured week (Oct 5) against the week before (Sep 28). Weeks starting Oct 12 and later have not completed D7 and are excluded.</p>
+</header>
+
+<section id="summary" class="grid2">
+  <div class="panel"><h3>Where we stand</h3><div id="headline" class="reco" style="margin-top:10px"></div></div>
+  <div class="panel"><h3>Data notes</h3>
+    <ul class="note" style="padding-left:18px;margin:8px 0 0">
+      <li>Spend is joined by campaign-name keyword. FreeCash spend sits under the <b>Almedia</b> campaign name and starts the week of Aug 31, so its P5-8 window has 3 weeks. KashKick had no US activity in this window.</li>
+      <li>No spend exists per siteid. Siteid ROAS is <b>implied</b>: logins × the channel and category cost per login that week. Use it to rank siteids inside a channel, not as booked ROAS.</li>
+      <li>InboxDollars moved from Prodege to <code>vc-*</code> siteids on 2026-03-23. This is a reporting change. It is outside this window, but do not compare siteids across it.</li>
+      <li>Dep CVR uses all logins. Level&gt;20 uses Player logins only. D0–D7 inclusive. Platform benchmark is every US channel, organic included.</li>
+      <li>Siteids with fewer than 200 logins over the 8 weeks are left out.</li>
+    </ul>
+  </div>
+</section>
+
+<section><h2>Last 4 matured weeks vs weeks 5–8</h2>
+  <p class="sub">Sep 14 – Oct 5 cohorts against Aug 17 – Sep 7 cohorts.</p>
+  <div class="panel tw" style="margin-top:12px"><table id="t-chan4"></table></div>
+</section>
+<section><h2>Latest matured week vs previous week</h2>
+  <p class="sub">Week of Oct 5 against week of Sep 28. One week is noisy for small channels, so read it beside the 4-week view.</p>
+  <div class="panel tw" style="margin-top:12px"><table id="t-chan1"></table></div>
+</section>
+
+<section><h2>Panel I · Weekly spend by channel</h2>
+  <div class="panel"><div class="cv tall"><canvas id="c-spend" role="img" aria-label="Stacked weekly spend by channel"></canvas></div></div>
+</section>
+<section><h2>Panel II · Quality by channel</h2>
+  <p class="sub">Dashed black line is the platform benchmark.</p>
+  <div class="grid2" style="margin-top:12px">
+    <div class="panel"><h3>D7 Dep CVR %</h3><div class="cv"><canvas id="c-cvr" role="img" aria-label="D7 deposit conversion by channel"></canvas></div></div>
+    <div class="panel"><h3>D7 Level &gt; 20 %</h3><div class="cv"><canvas id="c-lvl" role="img" aria-label="D7 level above 20 by channel"></canvas></div></div>
+  </div>
+  <div class="panel" style="margin-top:16px"><h3>D7 ROAS % (CM1 / spend)</h3><div class="cv"><canvas id="c-roas" role="img" aria-label="D7 ROAS by channel"></canvas></div></div>
+</section>
+<section><h2>Panel III · Channel deep dive</h2>
+  <div class="panel">
+    <div class="ctl"><span id="chips"></span><select id="catsel" aria-label="Category"><option>Overall</option><option>Bingo</option><option>Solitaire</option></select></div>
+    <div class="cv tall"><canvas id="c-deep" role="img" aria-label="Spend bars with CVR, level and ROAS lines"></canvas></div>
+    <p class="note" style="margin:8px 0 0">Bars: spend (left axis). Solid lines: Dep CVR and Level&gt;20 (right axis). Dashed: D7 ROAS (right axis).</p>
+  </div>
+</section>
+<section><h2>Panel IV · Siteid drilldown</h2>
+  <div class="panel">
+    <div class="ctl"><select id="sitech" aria-label="Channel"></select><select id="sitemet" aria-label="Metric"><option value="cvr">D7 Dep CVR %</option><option value="lvl">D7 Level&gt;20 %</option><option value="roas">Implied D7 ROAS %</option><option value="logins">Logins</option></select></div>
+    <div class="cv tall"><canvas id="c-site" role="img" aria-label="Siteid weekly metric lines"></canvas></div>
+  </div>
+</section>
+
+<section><h2>Siteid scorecard and action</h2>
+  <p class="sub">Verdicts use the last 4 matured weeks. Scale up: implied ROAS ≥ 10% with CVR ≥ 15% and Level&gt;20 ≥ 12%, or CVR ≥ 20% with Level&gt;20 ≥ 13% and ROAS at or above the channel. Scale down: CVR &lt; 12% with Level&gt;20 &lt; 8%, or Level&gt;20 ≤ 6.5% with ROAS &lt; 5.5%, or ROAS &lt; 2.5%. Under 100 logins is a watch, not an action.</p>
+  <div class="panel tw" style="margin-top:12px"><table id="t-site"></table></div>
+</section>
+<section><h2>Campaigns where the siteid action applies</h2>
+  <p class="sub">Campaign level view of the same window. Only campaigns with at least 40 logins are shown. Scale down and scale up rows are the ones to change in the campaign's siteid targeting or bid.</p>
+  <div class="panel tw" style="margin-top:12px"><table id="t-camp"></table></div>
+</section>
+</div>
+<script>
+const D=__DATA__;
+const CHS=['InboxDollars','MyAppFree','AdAction','FreeCash'];
+const COL={InboxDollars:'#D64545',MyAppFree:'#E8A33D',AdAction:'#5B7FDB',FreeCash:'#4AAB7E'};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const f=(v,d=1)=>v==null?'—':v.toFixed(d);
+const money=v=>v==null?'—':'$'+Math.round(v).toLocaleString();
+const pct=(a,b)=>a==null||b==null||b===0?null:(a-b);
+function dcell(a,b,inv,suffix='pp',d=1){const x=pct(a,b);if(x==null)return '<td class="n">—</td>';const good=inv?x<0:x>0;return `<td class="n ${Math.abs(x)<0.05?'':good?'good':'bad'}">${x>0?'+':''}${x.toFixed(d)}${suffix}</td>`}
+function relcell(a,b){if(a==null||!b)return '<td class="n">—</td>';const x=100*(a-b)/b;return `<td class="n ${Math.abs(x)<2?'':x>0?'':''}">${x>0?'+':''}${x.toFixed(0)}%</td>`}
+function chanTable(id,cur,prev,labs){
+  const rows=CHS.map(c=>[c,D.chan[c].periods[cur],D.chan[c].periods[prev]]);
+  rows.push(['Platform',D.periods[cur],D.periods[prev]]);
+  let h=`<thead><tr><th>Channel</th><th class="n">Spend ${labs[0]}</th><th class="n">Spend ${labs[1]}</th><th class="n">Δ</th><th class="n">Logins ${labs[0]}</th><th class="n">${labs[1]}</th><th class="n">CVR ${labs[0]}</th><th class="n">${labs[1]}</th><th class="n">Δ</th><th class="n">Lvl&gt;20 ${labs[0]}</th><th class="n">${labs[1]}</th><th class="n">Δ</th><th class="n">ROAS ${labs[0]}</th><th class="n">${labs[1]}</th><th class="n">Δ</th></tr></thead><tbody>`;
+  for(const [n,a,b] of rows){
+    h+=`<tr class="${n==='Platform'?'plat':''}"><td>${n}</td><td class="n">${money(a.spend)}</td><td class="n">${money(b.spend)}</td>${relcell(a.spend,b.spend)}<td class="n">${a.logins.toLocaleString()}</td><td class="n">${b.logins.toLocaleString()}</td><td class="n">${f(a.cvr)}%</td><td class="n">${f(b.cvr)}%</td>${dcell(a.cvr,b.cvr)}<td class="n">${f(a.lvl)}%</td><td class="n">${f(b.lvl)}%</td>${dcell(a.lvl,b.lvl)}<td class="n">${f(a.roas)}%</td><td class="n">${f(b.roas)}%</td>${dcell(a.roas,b.roas)}</tr>`;
+  }
+  document.getElementById(id).innerHTML=h+'</tbody>';
+}
+chanTable('t-chan4','L4','P4',['L4W','P5-8']);
+chanTable('t-chan1','LAST','PREV',['Oct 5','Sep 28']);
+
+// summary
+(function(){
+  const g=v=>D.sites.filter(s=>s.verdict===v);
+  const el=document.getElementById('headline');
+  const L=D.periods.L4,P=D.periods.P4;
+  const incSpendL=CHS.reduce((a,c)=>a+D.chan[c].periods.L4.spend,0),incSpendP=CHS.reduce((a,c)=>a+D.chan[c].periods.P4.spend,0);
+  let h=`<div>Incent spend ${money(incSpendL)} in the last 4 matured weeks vs ${money(incSpendP)} before (${((incSpendL/incSpendP-1)*100).toFixed(0)}%). Every incent channel runs below the platform benchmark of ${f(L.cvr)}% CVR and ${f(L.lvl)}% Level&gt;20 except MyAppFree on CVR.</div>`;
+  for(const [v,lab] of [['SCALE UP','Scale up'],['SCALE DOWN','Scale down'],['HOLD','Hold'],['DORMANT','Already off']]){
+    const s=g(v); if(!s.length) continue;
+    h+=`<div class="row"><span class="pill ${v.replace(' ','')}">${lab}</span><span>${s.map(x=>x.channel+' '+x.site).join(' · ')}</span></div>`;
+  }
+  el.innerHTML=h;
+})();
+
+// siteid table
+(function(){
+  const order={'SCALE UP':0,'SCALE DOWN':1,'HOLD':2,'WATCH':3,'DORMANT':4};
+  const S=[...D.sites].sort((a,b)=>order[a.verdict]-order[b.verdict]||a.channel.localeCompare(b.channel)||b.L4.logins-a.L4.logins);
+  let h=`<thead><tr><th>Action</th><th>Channel</th><th>Siteid</th><th class="n">Logins L4W</th><th class="n">Logins P5-8</th><th class="n">CVR L4W</th><th class="n">Δ</th><th class="n">Lvl&gt;20 L4W</th><th class="n">Δ</th><th class="n">CM1 / login</th><th class="n">Impl. ROAS L4W</th><th class="n">Δ</th><th class="n">ROAS Oct 5</th><th class="n">ROAS Sep 28</th><th class="n">CVR Oct 5</th><th class="n">CVR Sep 28</th></tr></thead><tbody>`;
+  for(const s of S){
+    const a=s.L4,b=s.P4;
+    h+=`<tr><td><span class="pill ${s.verdict.replace(' ','')}">${s.verdict}</span></td><td>${s.channel}</td><td class="mono">${s.site}</td><td class="n">${a.logins}</td><td class="n">${b.logins}</td><td class="n">${f(a.cvr)}%</td>${dcell(a.cvr,b.cvr)}<td class="n">${f(a.lvl)}%</td>${dcell(a.lvl,b.lvl)}<td class="n">${a.cm1_per_login==null?'—':'$'+f(a.cm1_per_login,2)}</td><td class="n">${f(a.roas)}%</td>${dcell(a.roas,b.roas)}<td class="n">${f(s.LAST.roas)}%</td><td class="n">${f(s.PREV.roas)}%</td><td class="n">${f(s.LAST.cvr)}%</td><td class="n">${f(s.PREV.cvr)}%</td></tr>`;
+  }
+  document.getElementById('t-site').innerHTML=h+'</tbody>';
+  const C=D.camps.filter(c=>c.action!=='HOLD').sort((a,b)=>a.action.localeCompare(b.action)||b.L4.logins-a.L4.logins);
+  let k=`<thead><tr><th>Action</th><th>Channel</th><th>Siteid</th><th>Campaign</th><th class="n">Logins L4W</th><th class="n">CVR</th><th class="n">Lvl&gt;20</th><th class="n">Impl. ROAS</th><th class="n">ROAS P5-8</th></tr></thead><tbody>`;
+  for(const c of C){k+=`<tr><td><span class="pill ${c.action.replace(' ','')}">${c.action}</span></td><td>${c.channel}</td><td class="mono">${c.site}</td><td class="camp">${c.camp}</td><td class="n">${c.L4.logins}</td><td class="n">${f(c.L4.cvr)}%</td><td class="n">${f(c.L4.lvl)}%</td><td class="n">${f(c.L4.roas)}%</td><td class="n">${f(c.P4.roas)}%</td></tr>`}
+  document.getElementById('t-camp').innerHTML=k+'</tbody>';
+})();
+
+// charts
+Chart.defaults.font.family="'JetBrains Mono',monospace";Chart.defaults.font.size=11;
+const charts={};
+function theme(){Chart.defaults.color=css('--muted');Chart.defaults.borderColor=css('--grid')}
+const lbls=D.weeks;
+const base=(extra={})=>({responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{boxWidth:10,usePointStyle:true}}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,grid:{color:css('--grid')}}},...extra});
+function line(label,data,color,extra={}){return {label,data,borderColor:color,backgroundColor:color,borderWidth:2,pointRadius:2.5,tension:.2,spanGaps:false,...extra}}
+function weeklySeries(c,k){return D.weeks.map(w=>{const r=D.chan[c].cat.Overall.find(x=>x.wk===w);return r&&r.logins>0?r[k]:null})}
+function mk(id,cfg){if(charts[id])charts[id].destroy();charts[id]=new Chart(document.getElementById(id),cfg)}
+function draw(){
+  theme();
+  mk('c-spend',{type:'bar',data:{labels:lbls,datasets:CHS.map(c=>({label:c,data:D.weeks.map(w=>D.chan[c].cat.Overall.find(x=>x.wk===w).spend),backgroundColor:COL[c]}))},options:base({scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{callback:v=>'$'+v/1000+'k'}}}})});
+  for(const [id,k] of [['c-cvr','cvr'],['c-lvl','lvl'],['c-roas','roas']]){
+    mk(id,{type:'line',data:{labels:lbls,datasets:[...CHS.map(c=>line(c,weeklySeries(c,k),COL[c])),line('Platform',D.plat.map(p=>p[k]),css('--plat'),{borderDash:[5,4],borderWidth:1.5,pointRadius:0})]},options:base({scales:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{callback:v=>v+'%'}}}})});
+  }
+  deep();site();
+}
+// panel III
+let curCh='InboxDollars';
+const chipBox=document.getElementById('chips');
+CHS.forEach(c=>{const b=document.createElement('button');b.className='chip';b.textContent=c;b.setAttribute('aria-pressed',c===curCh);b.onclick=()=>{curCh=c;[...chipBox.children].forEach(x=>x.setAttribute('aria-pressed',x.textContent===c));deep()};chipBox.appendChild(b);chipBox.appendChild(document.createTextNode(' '))});
+document.getElementById('catsel').onchange=deep;
+function deep(){
+  const cat=document.getElementById('catsel').value;const rows=(D.chan[curCh].cat[cat]||[]);
+  const get=k=>D.weeks.map(w=>{const r=rows.find(x=>x.wk===w);return r&&r.logins>0?r[k]:null});
+  const sp=D.weeks.map(w=>{const r=rows.find(x=>x.wk===w);return r?r.spend:0});
+  mk('c-deep',{data:{labels:lbls,datasets:[
+    {type:'bar',label:'Spend',data:sp,backgroundColor:COL[curCh]+'55',borderColor:COL[curCh],borderWidth:1,yAxisID:'y'},
+    line('Dep CVR %',get('cvr'),css('--fg'),{type:'line',yAxisID:'y1'}),
+    line('Level>20 %',get('lvl'),COL[curCh],{type:'line',yAxisID:'y1'}),
+    line('D7 ROAS %',get('roas'),css('--muted'),{type:'line',yAxisID:'y1',borderDash:[6,4]})]},
+  options:base({scales:{x:{grid:{display:false}},y:{beginAtZero:true,position:'left',ticks:{callback:v=>'$'+v/1000+'k'}},y1:{beginAtZero:true,position:'right',grid:{display:false},ticks:{callback:v=>v+'%'}}}})});
+}
+// panel IV
+const sc=document.getElementById('sitech');CHS.forEach(c=>sc.add(new Option(c,c)));
+sc.onchange=site;document.getElementById('sitemet').onchange=site;
+const PAL=['#14181F','#D64545','#5B7FDB','#E8A33D','#4AAB7E','#9B59B6','#2A9DAA','#B0613A','#7A8699','#C2477F'];
+function site(){
+  const ch=sc.value,m=document.getElementById('sitemet').value;
+  const S=D.sites.filter(s=>s.channel===ch&&s.weekly.some(w=>w.logins>=20)).sort((a,b)=>b.L4.logins+b.P4.logins-a.L4.logins-a.P4.logins);
+  const ds=S.map((s,i)=>line(s.site,s.weekly.map(w=>w.logins>=20?w[m]:null),PAL[i%PAL.length].replace('#14181F',css('--fg'))));
+  mk('c-site',{type:'line',data:{labels:D.siteweeks,datasets:ds},options:base({scales:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{callback:v=>m==='logins'?v:v+'%'}}}})});
+}
+draw();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw);
+new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+</script>
